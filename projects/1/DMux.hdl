@@ -12,5 +12,9 @@ CHIP DMux {
     OUT a, b;
 
     PARTS:
-    //// Replace this comment with your code.
+    And(a=sel, b=in, out=selB);
+    Not(in=sel, out=notSel);
+    And(a=notSel, b=in, out=selA);
+    And(a=selA, b=true, out=a);
+    And(a=selB, b=true, out=b);
 }
