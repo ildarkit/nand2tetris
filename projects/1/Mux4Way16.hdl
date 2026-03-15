@@ -14,5 +14,23 @@ CHIP Mux4Way16 {
     OUT out[16];
     
     PARTS:
-    //// Replace this comment with your code.
+    /* select D */
+    Nand(a=sel[0], b=sel[1], out=selNotD);
+    
+    /* select B or C */
+    Xor(a=sel[0], b=sel[1], out=selBC);
+    Not(in=sel[0], out=notSel0);
+    And(a=selBC, b=notSel0, out=selC);
+    Xor(a=selC, b=selBC, out=selB);
+
+    /* select A */
+    Xor(a=selNotD, b=selBC, out=selA);
+
+    Mux16(a=false, b=a, sel=selA, out=outA);
+    Mux16(a=d, b=false, sel=selNotD, out=outD);
+    Mux16(a=false, b=b, sel=selB, out=outB);
+    Mux16(a=false, b=c, sel=selC, out=outC);
+    Or16(a=outA, b=outD, out=outAD);
+    Or16(a=outB, b=outC, out=outBC);
+    Or16(a=outAD, b=outBC, out=out);
 }
