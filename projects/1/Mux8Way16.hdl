@@ -20,5 +20,60 @@ CHIP Mux8Way16 {
     OUT out[16];
 
     PARTS:
-    //// Replace this comment with your code.
+    DMux(in=true, sel=sel[2], a=group0, b=group1);
+    And16(
+      a[0]=group0,
+      a[1]=group0,
+      a[2]=group0,
+      a[3]=group0,
+      a[4]=group0,
+      a[5]=group0,
+      a[6]=group0,
+      a[7]=group0,
+      a[8]=group0,
+      a[9]=group0,
+      a[10]=group0,
+      a[11]=group0,
+      a[12]=group0,
+      a[13]=group0,
+      a[14]=group0,
+      a[15]=group0,
+      b=true,
+      out=mask0
+    );
+    And16(
+      a[0]=group1,
+      a[1]=group1,
+      a[2]=group1,
+      a[3]=group1,
+      a[4]=group1,
+      a[5]=group1,
+      a[6]=group1,
+      a[7]=group1,
+      a[8]=group1,
+      a[9]=group1,
+      a[10]=group1,
+      a[11]=group1,
+      a[12]=group1,
+      a[13]=group1,
+      a[14]=group1,
+      a[15]=group1,
+      b=true,
+      out=mask1
+    );
+    And16(a=mask0, b=a, out=newA);
+    And16(a=mask0, b=b, out=newB);
+    And16(a=mask0, b=c, out=newC);
+    And16(a=mask0, b=d, out=newD);
+    And16(a=mask1, b=e, out=newE);
+    And16(a=mask1, b=f, out=newF);
+    And16(a=mask1, b=g, out=newG);
+    And16(a=mask1, b=h, out=newH);
+
+    Or16(a=newA, b=newE, out=out1);
+    Or16(a=newB, b=newF, out=out2);
+    Or16(a=newC, b=newG, out=out3);
+    Or16(a=newD, b=newH, out=out4);
+
+    Mux4Way16(a=out1, b=out2, c=out3, d=out4, sel=sel[0..1], out=out);
 }
