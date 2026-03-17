@@ -41,5 +41,58 @@ CHIP ALU {
         ng;      // if (out < 0)  equals 1, else 0
 
     PARTS:
-    //// Replace this comment with your code.
+    Mux16(a=x, b=false, sel=zx, out=xZero);
+    Not16(in=xZero, out=xNeg);
+    Mux16(a=xZero, b=xNeg, sel=nx, out=xOut);
+
+    Mux16(a=y, b=false, sel=zy, out=yZero);
+    Not16(in=yZero, out=yNeg);
+    Mux16(a=yZero, b=yNeg, sel=ny, out=yOut);
+
+    Add16(a=xOut, b=yOut, out=addOut);
+    And16(a=xOut, b=yOut, out=andOut);
+    Mux16(a=andOut, b=addOut, sel=f, out=outF);
+
+    Not16(in=outF, out=negOutF);
+    Mux16(
+      a=outF,
+      b=negOutF,
+      sel=no,
+      out=out,
+      out[0]=bit0,
+      out[1]=bit1,
+      out[2]=bit2,
+      out[3]=bit3,
+      out[4]=bit4,
+      out[5]=bit5,
+      out[6]=bit6,
+      out[7]=bit7,
+      out[8]=bit8,
+      out[9]=bit9,
+      out[10]=bit10,
+      out[11]=bit11,
+      out[12]=bit12,
+      out[13]=bit13,
+      out[14]=bit14,
+      out[15]=bit15
+    );
+
+    Or(a=bit0, b=bit1, out=bitTrue1);
+    Or(a=bit2, b=bit3, out=bitTrue2);
+    Or(a=bit4, b=bit5, out=bitTrue3);
+    Or(a=bit6, b=bit7, out=bitTrue4);
+    Or(a=bit8, b=bit9, out=bitTrue5);
+    Or(a=bit10, b=bit11, out=bitTrue6);
+    Or(a=bit12, b=bit13, out=bitTrue7);
+    Or(a=bit14, b=bit15, out=bitTrue8);
+    Or(a=bitTrue1, b=bitTrue2, out=bitTrue9);
+    Or(a=bitTrue3, b=bitTrue4, out=bitTrue10);
+    Or(a=bitTrue5, b=bitTrue6, out=bitTrue11);
+    Or(a=bitTrue7, b=bitTrue8, out=bitTrue12);
+    Or(a=bitTrue9, b=bitTrue10, out=bitTrue13);
+    Or(a=bitTrue11, b=bitTrue12, out=bitTrue14);
+    Or(a=bitTrue13, b=bitTrue14, out=bitTrue15);
+    Mux(a=true, b=false, sel=bitTrue15, out=zr);
+
+    And(a=bit15, b=true, out=ng);
 }
