@@ -13,5 +13,47 @@ CHIP RAM16K {
     OUT out[16];
 
     PARTS:
-    //// Replace this comment with your code.
+    Not16(in[0..1]=address[12..13], out[0]=addressNot0, out[1]=addressNot1);
+    Inc16(in=false, out[0]=index10, out[1]=index11, out=index1);
+    Inc16(in=index1, out[0]=index20, out[1]=index21, out=index2);
+    Inc16(in=index2, out[0]=index30, out[1]=index31);
+
+    Xor(a=addressNot0, b=false, out=sel00);
+    Xor(a=addressNot1, b=false, out=sel01);
+    And(a=sel00, b=sel01, out=sel0);
+
+    Xor(a=addressNot0, b=index10, out=sel10);
+    Xor(a=addressNot1, b=index11, out=sel11);
+    And(a=sel10, b=sel11, out=sel1);
+
+    Xor(a=addressNot0, b=index20, out=sel20);
+    Xor(a=addressNot1, b=index21, out=sel21);
+    And(a=sel20, b=sel21, out=sel2);
+
+    Xor(a=addressNot0, b=index30, out=sel30);
+    Xor(a=addressNot1, b=index31, out=sel31);
+    And(a=sel30, b=sel31, out=sel3);
+
+    And(a=load, b=sel0, out=load0);
+    And(a=load, b=sel1, out=load1);
+    And(a=load, b=sel2, out=load2);
+    And(a=load, b=sel3, out=load3);
+
+    RAM4K(in=in, load=load0, address=address[0..11], out=out0);
+    RAM4K(in=in, load=load1, address=address[0..11], out=out1);
+    RAM4K(in=in, load=load2, address=address[0..11], out=out2);
+    RAM4K(in=in, load=load3, address=address[0..11], out=out3);
+
+    Mux16(a=false, b=true, sel=sel0, out=selIndex0);
+    Mux16(a=false, b=true, sel=sel1, out=selIndex1);
+    Mux16(a=false, b=true, sel=sel2, out=selIndex2);
+    Mux16(a=false, b=true, sel=sel3, out=selIndex3);
+
+    And16(a=out0, b=selIndex0, out=res0);
+    And16(a=out1, b=selIndex1, out=res1);
+    And16(a=out2, b=selIndex2, out=res2);
+    And16(a=out3, b=selIndex3, out=res3);
+    Or16(a=res0, b=res1, out=resOr1);
+    Or16(a=res2, b=res3, out=resOr2);
+    Or16(a=resOr1, b=resOr2, out=out);
 }
