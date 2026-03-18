@@ -13,5 +13,103 @@ CHIP RAM64 {
     OUT out[16];
 
     PARTS:
-    //// Replace this comment with your code.
+    Not16(in[0..2]=address[3..5], out[0]=addressNot0, out[1]=addressNot1, out[2]=addressNot2);
+    Inc16(in=false, out[0]=index10, out[1]=index11, out[2]=index12, out=index1);
+    Inc16(in=index1, out[0]=index20, out[1]=index21, out[2]=index22, out=index2);
+    Inc16(in=index2, out[0]=index30, out[1]=index31, out[2]=index32, out=index3);
+    Inc16(in=index3, out[0]=index40, out[1]=index41, out[2]=index42, out=index4);
+    Inc16(in=index4, out[0]=index50, out[1]=index51, out[2]=index52, out=index5);
+    Inc16(in=index5, out[0]=index60, out[1]=index61, out[2]=index62, out=index6);
+    Inc16(in=index6, out[0]=index70, out[1]=index71, out[2]=index72);
+
+    Xor(a=addressNot0, b=false, out=sel00);
+    Xor(a=addressNot1, b=false, out=sel01);
+    Xor(a=addressNot2, b=false, out=sel02);
+    And(a=sel00, b=sel01, out=selOut01);
+    And(a=selOut01, b=sel02, out=sel0);
+
+    Xor(a=addressNot0, b=index10, out=sel10);
+    Xor(a=addressNot1, b=index11, out=sel11);
+    Xor(a=addressNot2, b=index12, out=sel12);
+    And(a=sel10, b=sel11, out=selOut11);
+    And(a=selOut11, b=sel12, out=sel1);
+
+    Xor(a=addressNot0, b=index20, out=sel20);
+    Xor(a=addressNot1, b=index21, out=sel21);
+    Xor(a=addressNot2, b=index22, out=sel22);
+    And(a=sel20, b=sel21, out=selOut21);
+    And(a=selOut21, b=sel22, out=sel2);
+
+    Xor(a=addressNot0, b=index30, out=sel30);
+    Xor(a=addressNot1, b=index31, out=sel31);
+    Xor(a=addressNot2, b=index32, out=sel32);
+    And(a=sel30, b=sel31, out=selOut31);
+    And(a=selOut31, b=sel32, out=sel3);
+
+    Xor(a=addressNot0, b=index40, out=sel40);
+    Xor(a=addressNot1, b=index41, out=sel41);
+    Xor(a=addressNot2, b=index42, out=sel42);
+    And(a=sel40, b=sel41, out=selOut41);
+    And(a=selOut41, b=sel42, out=sel4);
+
+    Xor(a=addressNot0, b=index50, out=sel50);
+    Xor(a=addressNot1, b=index51, out=sel51);
+    Xor(a=addressNot2, b=index52, out=sel52);
+    And(a=sel50, b=sel51, out=selOut51);
+    And(a=selOut51, b=sel52, out=sel5);
+
+    Xor(a=addressNot0, b=index60, out=sel60);
+    Xor(a=addressNot1, b=index61, out=sel61);
+    Xor(a=addressNot2, b=index62, out=sel62);
+    And(a=sel60, b=sel61, out=selOut61);
+    And(a=selOut61, b=sel62, out=sel6);
+
+    Xor(a=addressNot0, b=index70, out=sel70);
+    Xor(a=addressNot1, b=index71, out=sel71);
+    Xor(a=addressNot2, b=index72, out=sel72);
+    And(a=sel70, b=sel71, out=selOut71);
+    And(a=selOut71, b=sel72, out=sel7);
+
+    And(a=load, b=sel0, out=load0);
+    And(a=load, b=sel1, out=load1);
+    And(a=load, b=sel2, out=load2);
+    And(a=load, b=sel3, out=load3);
+    And(a=load, b=sel4, out=load4);
+    And(a=load, b=sel5, out=load5);
+    And(a=load, b=sel6, out=load6);
+    And(a=load, b=sel7, out=load7);
+
+    RAM8(in=in, load=load0, address=address[0..2], out=out0);
+    RAM8(in=in, load=load1, address=address[0..2], out=out1);
+    RAM8(in=in, load=load2, address=address[0..2], out=out2);
+    RAM8(in=in, load=load3, address=address[0..2], out=out3);
+    RAM8(in=in, load=load4, address=address[0..2], out=out4);
+    RAM8(in=in, load=load5, address=address[0..2], out=out5);
+    RAM8(in=in, load=load6, address=address[0..2], out=out6);
+    RAM8(in=in, load=load7, address=address[0..2], out=out7);
+
+    Mux16(a=false, b=true, sel=sel0, out=selIndex0);
+    Mux16(a=false, b=true, sel=sel1, out=selIndex1);
+    Mux16(a=false, b=true, sel=sel2, out=selIndex2);
+    Mux16(a=false, b=true, sel=sel3, out=selIndex3);
+    Mux16(a=false, b=true, sel=sel4, out=selIndex4);
+    Mux16(a=false, b=true, sel=sel5, out=selIndex5);
+    Mux16(a=false, b=true, sel=sel6, out=selIndex6);
+    Mux16(a=false, b=true, sel=sel7, out=selIndex7);
+
+    And16(a=out0, b=selIndex0, out=res0);
+    And16(a=out1, b=selIndex1, out=res1);
+    And16(a=out2, b=selIndex2, out=res2);
+    And16(a=out3, b=selIndex3, out=res3);
+    And16(a=out4, b=selIndex4, out=res4);
+    And16(a=out5, b=selIndex5, out=res5);
+    And16(a=out6, b=selIndex6, out=res6);
+    And16(a=out7, b=selIndex7, out=res7);
+    Or16(a=res0, b=res1, out=resOr1);
+    Or16(a=res2, b=res3, out=resOr2);
+    Or16(a=res4, b=res5, out=resOr3);
+    Or16(a=res6, b=res7, out=resOr4);
+    Or16(a=resOr1, b=resOr2, out=resOr5);
+    Or16(a=resOr3, b=resOr4, out=resOr6);
+    Or16(a=resOr5, b=resOr6, out=out);
 }
