@@ -6,6 +6,9 @@ pub enum CommandType {
     CArithmetic,
     CPush,
     CPop,
+    CGoto,
+    CIfGoto,
+    CLabel,
 }
 
 pub struct Parser<R: BufRead> {
@@ -44,6 +47,9 @@ impl<R: BufRead> Parser<R> {
             "push" => CommandType::CPush,
             "pop" => CommandType::CPop,
             "add" | "sub" | "neg" | "eq" | "gt" | "lt" | "and" | "or" | "not" => CommandType::CArithmetic,
+            "goto"  => CommandType::CGoto,
+            "if-goto" => CommandType::CIfGoto,
+            "label" => CommandType::CLabel,
             _ => panic!("unsupported command: {}", first),
         }
     }
@@ -54,7 +60,8 @@ impl<R: BufRead> Parser<R> {
         let parts: Vec<&str> = s.split_whitespace().collect();
         match self.command_type() {
             CommandType::CArithmetic => Some(parts[0]),
-            CommandType::CPush | CommandType::CPop => Some(parts[1]),
+            CommandType::CPush | CommandType::CPop | CommandType::CGoto | 
+                CommandType::CIfGoto | CommandType::CLabel => Some(parts[1]),
         }
     }
 

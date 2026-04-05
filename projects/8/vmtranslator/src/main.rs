@@ -21,15 +21,23 @@ fn main() -> io::Result<()> {
 
     let mut parser = Parser::new(reader);
     while parser.advance()? {
+        let arg1 = parser.arg1().unwrap();
         match parser.command_type() {
             parser::CommandType::CArithmetic => {
-                let cmd = parser.arg1().unwrap();
-                writer.write_arithmetic(cmd)?;
+                writer.write_arithmetic(arg1)?;
             }
             parser::CommandType::CPush | parser::CommandType::CPop => {
-                let segment = parser.arg1().unwrap();
                 let index = parser.arg2().unwrap();
-                writer.write_push_pop(parser.command_type(), segment, index)?;
+                writer.write_push_pop(parser.command_type(), arg1, index)?;
+            }
+            parser::CommandType::CGoto => {
+                writer.write_goto(arg1)?;
+            }
+            parser::CommandType::CIfGoto => {
+                writer.write_if(arg1)?;
+            }
+            parser::CommandType::CLabel => {
+                writer.write_label(arg1)?;
             }
         }
     }

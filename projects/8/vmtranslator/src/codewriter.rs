@@ -40,6 +40,28 @@ impl CodeWriter {
         Ok(())
     }
 
+    pub fn write_label(&mut self, label: &str) -> io::Result<()> {
+        writeln!(self.out, "({}${})", self.file_name, label)?;
+        Ok(())
+    }
+
+    pub fn write_goto(&mut self, label: &str) -> io::Result<()> {
+        writeln!(self.out, "// goto {}", label)?;
+        writeln!(self.out, "@{}${}", self.file_name, label)?;
+        writeln!(self.out, "0;JMP")?;
+        Ok(())
+    }
+
+    pub fn write_if(&mut self, label: &str) -> io::Result<()> {
+        writeln!(self.out, "// if-goto {}", label)?;
+        writeln!(self.out, "@SP")?;
+        writeln!(self.out, "AM=M-1")?; // SP--, A=SP
+        writeln!(self.out, "D=M")?;    // D = y
+        writeln!(self.out, "@{}${}", self.file_name, label)?;
+        writeln!(self.out, "D;JNE")?;
+        Ok(())
+    }
+
     pub fn write_arithmetic(&mut self, cmd: &str) -> io::Result<()> {
         match cmd {
             "add" => {
