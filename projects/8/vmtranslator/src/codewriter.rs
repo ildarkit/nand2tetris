@@ -40,6 +40,10 @@ impl CodeWriter {
         Ok(())
     }
 
+    pub fn set_file_name(&mut self, filename: &str) {
+        self.file_name = filename.to_string();
+    }
+
     pub fn write_label(&mut self, label: &str) -> io::Result<()> {
         writeln!(self.out, "({}${})", self.file_name, label)?;
         Ok(())
