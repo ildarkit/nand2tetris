@@ -2,7 +2,7 @@
 use std::env;
 use std::fs::File;
 use std::io::{self, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 mod parser;
 mod codewriter;
@@ -12,7 +12,7 @@ use codewriter::CodeWriter;
 
 const MESSAGE: &str = "usage: vmtranslator <Dir/File.vm>";
 
-fn entry_process(entry_path: PathBuf, writer: &mut CodeWriter) -> io::Result<()> {
+fn entry_process(entry_path: &Path, writer: &mut CodeWriter) -> io::Result<()> {
     if let Some(entry) = entry_path.to_str() {
         let input = File::open(entry)?;
         let reader = BufReader::new(input);
@@ -46,6 +46,7 @@ fn entry_process(entry_path: PathBuf, writer: &mut CodeWriter) -> io::Result<()>
 fn file_path_stem(path: &Path) -> &str {
     path.file_stem().and_then(|s| s.to_str()).expect("invalid filename")
 }
+
 fn main() -> io::Result<()> {
     let arg = env::args().nth(1).expect(MESSAGE);
     let path = Path::new(&arg);
@@ -56,11 +57,11 @@ fn main() -> io::Result<()> {
     if path.is_dir() {
         for entry in path.read_dir()? {
             let entry_path = entry?.path();
-            writer.set_file_name(file_path_stem(&entry_path));
-            entry_process(entry_path, &mut writer)?;
+            writer.set_file_name(file_path_stem(entry_path.as_path()));
+            entry_process(entry_path.as_path(), &mut writer)?;
         }
     } else {
-        entry_process(path.to_path_buf(), &mut writer)?;
+        entry_process(path, &mut writer)?;
     };
 
     writer.close()?;
