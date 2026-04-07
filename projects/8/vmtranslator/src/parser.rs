@@ -9,6 +9,9 @@ pub enum CommandType {
     CGoto,
     CIfGoto,
     CLabel,
+    CFunction,
+    CCall,
+    CReturn,
 }
 
 pub struct Parser<R: BufRead> {
@@ -50,6 +53,9 @@ impl<R: BufRead> Parser<R> {
             "goto"  => CommandType::CGoto,
             "if-goto" => CommandType::CIfGoto,
             "label" => CommandType::CLabel,
+            "function" => CommandType::CFunction,
+            "call" => CommandType::CCall,
+            "return" => CommandType::CReturn,
             _ => panic!("unsupported command: {}", first),
         }
     }
@@ -59,17 +65,26 @@ impl<R: BufRead> Parser<R> {
         let s = self.current.as_ref()?;
         let parts: Vec<&str> = s.split_whitespace().collect();
         match self.command_type() {
-            CommandType::CArithmetic => Some(parts[0]),
-            CommandType::CPush | CommandType::CPop | CommandType::CGoto | 
-                CommandType::CIfGoto | CommandType::CLabel => Some(parts[1]),
+            CommandType::CArithmetic |
+            CommandType::CReturn => Some(parts[0]),
+            CommandType::CPush |
+            CommandType::CPop |
+            CommandType::CGoto | 
+            CommandType::CIfGoto |
+            CommandType::CLabel |
+            CommandType::CFunction |
+            CommandType::CCall => Some(parts[1]),
         }
     }
 
-    pub fn arg2(&self) -> Option<i32> {
+    pub fn arg2(&self) -> Option<u32> {
         let s = self.current.as_ref()?;
         let parts: Vec<&str> = s.split_whitespace().collect();
         match self.command_type() {
-            CommandType::CPush | CommandType::CPop => parts.get(2).and_then(|p| p.parse().ok()),
+            CommandType::CPush |
+            CommandType::CPop |
+            CommandType::CFunction |
+            CommandType::CCall => parts.get(2).and_then(|p| p.parse().ok()),
             _ => None,
         }
     }

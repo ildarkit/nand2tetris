@@ -36,7 +36,17 @@ fn entry_process(entry_path: &Path, writer: &mut CodeWriter) -> io::Result<()> {
                 parser::CommandType::CLabel => {
                     writer.write_label(arg1)?;
                 }
-                parser::CommandType::CFunction => todo!(),
+                parser::CommandType::CFunction => {
+                    let nvars = parser.arg2().unwrap();
+                    writer.write_function(arg1, nvars)?;
+                },
+                parser::CommandType::CCall => {
+                    let nargs = parser.arg2().unwrap();
+                    writer.write_call(arg1, nargs)?;
+                },
+                parser::CommandType::CReturn => {
+                    writer.write_return()?;
+                },
             }
         }
     }
