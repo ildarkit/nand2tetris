@@ -59,16 +59,26 @@ fn file_path_stem(path: &Path) -> &str {
 
 fn main() -> io::Result<()> {
     let arg = env::args().nth(1).expect(MESSAGE);
-    let path = Path::new(&arg);
-    let out_path = path.with_extension("asm");
+    let path_buf = Path::new(&arg).canonicalize()?;
+    let path = path_buf.as_path();
+    let out_path = if path.is_dir() {
+        let file_name = path.file_name().unwrap();
+        path.join(Path::new(file_name).with_extension("asm"))
+    } else {
+        path.with_extension("asm")
+    };
     let file_stem = file_path_stem(path);
     let mut writer = CodeWriter::new(&out_path, file_stem)?;
 
     if path.is_dir() {
         for entry in path.read_dir()? {
             let entry_path = entry?.path();
-            writer.set_file_name(file_path_stem(entry_path.as_path()));
-            entry_process(entry_path.as_path(), &mut writer)?;
+            if let Some(ext) = entry_path.extension() {
+                if ext == "vm" {
+                    writer.set_file_name(file_path_stem(entry_path.as_path()));
+                    entry_process(entry_path.as_path(), &mut writer)?;
+                }
+            }
         }
     } else {
         entry_process(path, &mut writer)?;
