@@ -1,5 +1,4 @@
 // src/codewriter.rs
-use std::iter::zip;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
@@ -102,14 +101,16 @@ impl CodeWriter {
     pub fn write_function(&mut self, function_name: &str, nvars: u32) -> io::Result<()> {
         writeln!(self.out, "// function {} {}", function_name, nvars)?;
         self.push_call_stack(function_name);
-        writeln!(self.out, "({})", function_name)?;
-        writeln!(self.out, "@0")?;
+
+        writeln!(self.out, "({})", function_name)?; // label
+
+        writeln!(self.out, "@0")?; // locals = 0
         writeln!(self.out, "D=A")?;
         writeln!(self.out, "@LCL")?;
         writeln!(self.out, "A=M")?;
         for i in 0..nvars {
             if i > 0 {
-                writeln!(self.out, "M=M+{}", i)?;
+                writeln!(self.out, "A=A+{}", i)?;
             }
             writeln!(self.out, "M=D")?;
         }
@@ -155,37 +156,44 @@ impl CodeWriter {
 
     pub fn write_return(&mut self) -> io::Result<()> {
         if let Some(func) = self.pop_call_stack() {
-            writeln!(self.out, "// return from {}", func)?;
+            writeln!(self.out, "// return {}", func)?;
         }
-
-        writeln!(self.out, "@LCL")?; // local segment address
-        writeln!(self.out, "D=A")?;
-        writeln!(self.out, "@R13")?;
-        writeln!(self.out, "M=D")?;
 
         writeln!(self.out, "@SP")?; // return to ARG 0
         writeln!(self.out, "AM=M-1")?;
         writeln!(self.out, "D=M")?;
         writeln!(self.out, "@ARG")?;
+        writeln!(self.out, "A=M")?;
         writeln!(self.out, "M=D")?;
 
-        writeln!(self.out, "@ARG")?; // SP
-        writeln!(self.out, "D=A+1")?;
+        writeln!(self.out, "@ARG")?; // SP = ARG + 1
+        writeln!(self.out, "D=M")?;
         writeln!(self.out, "@SP")?; 
-        writeln!(self.out, "A=D")?;
+        writeln!(self.out, "M=D+1")?;
 
-        let index = vec![1, 2, 3, 4]; // restore segment address
-        let segment = vec!["THAT", "THIS", "ARG", "LCL"];
-        for (i, seg) in zip(index, segment) {
+        writeln!(self.out, "@LCL")?; // store LCL segment address
+        writeln!(self.out, "D=M")?;
+        writeln!(self.out, "@R13")?;
+        writeln!(self.out, "M=D")?;
+
+        let segment = vec!["THAT", "THIS", "ARG", "LCL"]; // restore segment address
+        let mut i = 1;
+        for seg in segment {
             writeln!(self.out, "@R13")?;
-            writeln!(self.out, "D=M-{}", i)?;
+            writeln!(self.out, "D=M")?;
+            writeln!(self.out, "@{}", i)?;
+            writeln!(self.out, "A=D-A")?;
+            writeln!(self.out, "D=M")?;
             writeln!(self.out, "@{}", seg)?;
             writeln!(self.out, "M=D")?;
+            i += 1;
         }
 
         writeln!(self.out, "@R13")?; // goto return address
-        writeln!(self.out, "A=M-5")?;
-        writeln!(self.out, "@R13")?;
+        writeln!(self.out, "D=M")?;
+        writeln!(self.out, "@5")?;
+        writeln!(self.out, "A=D-A")?;
+        writeln!(self.out, "A=M")?;
         writeln!(self.out, "0;JMP")?;
         Ok(())
     }
