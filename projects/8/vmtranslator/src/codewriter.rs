@@ -26,6 +26,15 @@ impl CodeWriter {
         )
     }
 
+    pub fn bootstrap(&mut self) -> io::Result<()> {
+        writeln!(self.out, "@256")?;
+        writeln!(self.out, "D=A")?;
+        writeln!(self.out, "@SP")?;
+        writeln!(self.out, "M=D")?;
+        self.write_call("Sys.init", 0)?;
+        Ok(())
+    }
+
     fn push_call_stack(&mut self, func: &str) {
         self.call_stack.push(func.to_string());
         self.current_calls.push(0);

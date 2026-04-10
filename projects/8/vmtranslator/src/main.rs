@@ -69,6 +69,7 @@ fn main() -> io::Result<()> {
     };
     let file_stem = file_path_stem(path);
     let mut writer = CodeWriter::new(&out_path, file_stem)?;
+    writer.bootstrap()?;
 
     if path.is_dir() {
         for entry in path.read_dir()? {
