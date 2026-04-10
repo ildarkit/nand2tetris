@@ -8,8 +8,8 @@ pub struct CodeWriter {
     out: File,
     file_name: String,
     label_counter: u32,
-    call_stack: Vec<String>,
-    current_calls: Vec<u32>,
+    current_caller: Option<String>,
+    current_calls: u32,
 }
 
 impl CodeWriter {
@@ -20,8 +20,8 @@ impl CodeWriter {
                 out,
                 file_name: file_name.to_string(),
                 label_counter: 0,
-                call_stack: vec![],
-                current_calls: vec![],
+                current_caller: None,
+                current_calls: 0,
             }
         )
     }
@@ -35,20 +35,14 @@ impl CodeWriter {
         Ok(())
     }
 
-    fn push_call_stack(&mut self, func: &str) {
-        self.call_stack.push(func.to_string());
-        self.current_calls.push(0);
-    }
-
-    fn pop_call_stack(&mut self) -> Option<String> {
-        self.current_calls.pop();
-        self.call_stack.pop()
+    fn replace_current_caller(&mut self, func: &str) {
+        self.current_caller.replace(func.to_string());
+        self.current_calls = 0;
     }
 
     fn caller_name(&self) -> String {
-        let len = self.call_stack.len();
-        if len > 0 {
-            self.call_stack[len - 1].clone()
+        if let Some(ref caller) = self.current_caller {
+            caller.clone()
         } else {
             self.file_name.clone()
         }
@@ -56,10 +50,7 @@ impl CodeWriter {
 
     fn return_address(&self) -> String {
         let label = self.caller_name();
-        let index = if self.current_calls.len() > 0 {
-            self.current_calls[self.current_calls.len() - 1]
-        } else { 0 };
-        format!("{}$ret.{}", label, index)
+        format!("{}$ret.{}", label, self.current_calls)
     }
 
     fn pop_stack(&mut self) -> io::Result<()> {
@@ -107,7 +98,7 @@ impl CodeWriter {
 
     pub fn write_function(&mut self, function_name: &str, nvars: u32) -> io::Result<()> {
         writeln!(self.out, "// function {} {}", function_name, nvars)?;
-        self.push_call_stack(function_name);
+        self.replace_current_caller(function_name);
 
         writeln!(self.out, "({})", function_name)?; // function label
 
@@ -153,16 +144,16 @@ impl CodeWriter {
         writeln!(self.out, "A=M")?;
         writeln!(self.out, "M=D")?;
 
-        self.write_goto(function_name)?; // goto function
+        writeln!(self.out, "@{}", function_name)?; // goto function
+        writeln!(self.out, "0;JMP")?;
 
-        writeln!(self.out, "({})", self.return_label())?;
-        let len = self.current_calls.len();
-        self.current_calls[len - 1] += 1;
+        writeln!(self.out, "({})", self.return_address())?;
+        self.current_calls += 1;
         Ok(())
     }
 
     pub fn write_return(&mut self) -> io::Result<()> {
-        if let Some(func) = self.pop_call_stack() {
+        if let Some(ref func) = self.current_caller {
             writeln!(self.out, "// return {}", func)?;
         }
 
@@ -384,7 +375,6 @@ impl CodeWriter {
     }
 
     pub fn close(&mut self) -> io::Result<()> {
-        self.end_asm()?;
         self.out.flush()
     }
 }
