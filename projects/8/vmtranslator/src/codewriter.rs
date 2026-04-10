@@ -45,16 +45,21 @@ impl CodeWriter {
         self.call_stack.pop()
     }
 
-    fn return_label(&self) -> String {
-        let caller = if let Some(caller) = self.call_stack.last() {
-            caller
+    fn caller_name(&self) -> String {
+        let len = self.call_stack.len();
+        if len > 0 {
+            self.call_stack[len - 1].clone()
         } else {
-            self.file_name.as_str()
-        };
+            self.file_name.clone()
+        }
+    }
+
+    fn return_address(&self) -> String {
+        let label = self.caller_name();
         let index = if self.current_calls.len() > 0 {
             self.current_calls[self.current_calls.len() - 1]
         } else { 0 };
-        format!("{}$ret{}", caller, index)
+        format!("{}$ret.{}", label, index)
     }
 
     fn pop_stack(&mut self) -> io::Result<()> {
@@ -74,25 +79,18 @@ impl CodeWriter {
         Ok(())
     }
 
-    fn end_asm(&mut self) -> io::Result<()> {
-        writeln!(self.out, "(END)")?;
-        writeln!(self.out, "@END")?;
-        writeln!(self.out, "0;JMP")?;
-        Ok(())
-    }
-
     pub fn set_file_name(&mut self, filename: &str) {
         self.file_name = filename.to_string();
     }
 
     pub fn write_label(&mut self, label: &str) -> io::Result<()> {
-        writeln!(self.out, "({}${})", self.file_name, label)?;
+        writeln!(self.out, "({}${})", self.caller_name(), label)?;
         Ok(())
     }
 
     pub fn write_goto(&mut self, label: &str) -> io::Result<()> {
         writeln!(self.out, "// goto {}", label)?;
-        writeln!(self.out, "@{}${}", self.file_name, label)?;
+        writeln!(self.out, "@{}${}", self.caller_name(), label)?;
         writeln!(self.out, "0;JMP")?;
         Ok(())
     }
@@ -102,7 +100,7 @@ impl CodeWriter {
         writeln!(self.out, "@SP")?;
         writeln!(self.out, "AM=M-1")?; // SP--, A=SP
         writeln!(self.out, "D=M")?;    // D = y
-        writeln!(self.out, "@{}${}", self.file_name, label)?;
+        writeln!(self.out, "@{}${}", self.caller_name(), label)?;
         writeln!(self.out, "D;JNE")?;
         Ok(())
     }
@@ -111,7 +109,7 @@ impl CodeWriter {
         writeln!(self.out, "// function {} {}", function_name, nvars)?;
         self.push_call_stack(function_name);
 
-        writeln!(self.out, "({})", function_name)?; // label
+        writeln!(self.out, "({})", function_name)?; // function label
 
         writeln!(self.out, "@0")?; // locals = 0
         writeln!(self.out, "D=A")?;
@@ -128,7 +126,7 @@ impl CodeWriter {
 
     pub fn write_call(&mut self, function_name: &str, nargs: u32) -> io::Result<()> {
         writeln!(self.out, "// call {} {}", function_name, nargs)?;
-        writeln!(self.out, "@{}", self.return_label())?; // store segments address in stack
+        writeln!(self.out, "@{}", self.return_address())?; // store segments address in stack
         writeln!(self.out, "D=A")?;
         self.push_stack()?;
         writeln!(self.out, "@LCL")?;
