@@ -102,15 +102,17 @@ impl CodeWriter {
 
         writeln!(self.out, "({})", function_name)?; // function label
 
-        writeln!(self.out, "@0")?; // locals = 0
-        writeln!(self.out, "D=A")?;
-        writeln!(self.out, "@LCL")?;
-        writeln!(self.out, "A=M")?;
-        for i in 0..nvars {
-            if i > 0 {
-                writeln!(self.out, "A=A+{}", i)?;
+        if nvars > 0 {
+            writeln!(self.out, "@0")?; // locals = 0
+            writeln!(self.out, "D=A")?;
+            writeln!(self.out, "@LCL")?;
+            writeln!(self.out, "A=M")?;
+            for i in 0..nvars {
+                writeln!(self.out, "M=D")?;
+                if i < nvars - 1 {
+                    writeln!(self.out, "A=A+1")?;
+                }
             }
-            writeln!(self.out, "M=D")?;
         }
         Ok(())
     }
@@ -121,27 +123,32 @@ impl CodeWriter {
         writeln!(self.out, "D=A")?;
         self.push_stack()?;
         writeln!(self.out, "@LCL")?;
-        writeln!(self.out, "D=A")?;
+        writeln!(self.out, "D=M")?;
         self.push_stack()?;
         writeln!(self.out, "@ARG")?;
-        writeln!(self.out, "D=A")?;
+        writeln!(self.out, "D=M")?;
         self.push_stack()?;
         writeln!(self.out, "@THIS")?;
-        writeln!(self.out, "D=A")?;
+        writeln!(self.out, "D=M")?;
         self.push_stack()?;
         writeln!(self.out, "@THAT")?;
-        writeln!(self.out, "D=A")?;
+        writeln!(self.out, "D=M")?;
         self.push_stack()?;
 
         writeln!(self.out, "@SP")?; // ARG
-        writeln!(self.out, "D=A")?;
+        writeln!(self.out, "D=M")?;
+        if nargs > 0 {
+            writeln!(self.out, "@{}", nargs)?;
+            writeln!(self.out, "D=D-A")?;
+        }
+        writeln!(self.out, "@5")?;
+        writeln!(self.out, "D=D-A")?;
         writeln!(self.out, "@ARG")?;
-        writeln!(self.out, "AM=D-5-{}", nargs)?;
+        writeln!(self.out, "M=D")?;
 
         writeln!(self.out, "@SP")?; // LCL
-        writeln!(self.out, "D=A")?;
+        writeln!(self.out, "D=M")?;
         writeln!(self.out, "@LCL")?;
-        writeln!(self.out, "A=M")?;
         writeln!(self.out, "M=D")?;
 
         writeln!(self.out, "@{}", function_name)?; // goto function
