@@ -53,8 +53,8 @@ fn entry_process(entry_path: &Path, writer: &mut CodeWriter) -> io::Result<()> {
     Ok(())
 }
 
-fn file_path_stem(path: &Path) -> &str {
-    path.file_stem().and_then(|s| s.to_str()).expect("invalid filename")
+fn file_path_stem(path: &Path) -> Option<&str> {
+    path.file_stem().and_then(|s| s.to_str())
 }
 
 fn main() -> io::Result<()> {
@@ -67,25 +67,29 @@ fn main() -> io::Result<()> {
     } else {
         path.with_extension("asm")
     };
-    let file_stem = file_path_stem(path);
-    let mut writer = CodeWriter::new(&out_path, file_stem)?;
-    writer.bootstrap()?;
 
-    if path.is_dir() {
-        for entry in path.read_dir()? {
-            let entry_path = entry?.path();
-            if let Some(ext) = entry_path.extension() {
-                if ext == "vm" {
-                    writer.set_file_name(file_path_stem(entry_path.as_path()));
-                    entry_process(entry_path.as_path(), &mut writer)?;
+    if let Some(file_stem) = file_path_stem(path) {
+        let mut writer = CodeWriter::new(&out_path, file_stem)?;
+        writer.bootstrap("Sys.init")?;
+
+        if path.is_dir() {
+            for entry in path.read_dir()? {
+                let entry_path = entry?.path();
+                if let Some(ext) = entry_path.extension() {
+                    if ext == "vm" {
+                        if let Some(entry_file_stem) = file_path_stem(&entry_path) {
+                            writer.set_file_name(entry_file_stem);
+                            entry_process(&entry_path, &mut writer)?;
+                        }
+                    }
                 }
             }
-        }
-    } else {
-        entry_process(path, &mut writer)?;
-    };
+        } else {
+            entry_process(path, &mut writer)?;
+        };
 
-    writer.close()?;
+        writer.close()?;
+    }
     Ok(())
 }
 

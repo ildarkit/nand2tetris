@@ -26,12 +26,12 @@ impl CodeWriter {
         )
     }
 
-    pub fn bootstrap(&mut self) -> io::Result<()> {
+    pub fn bootstrap(&mut self, entrypoint: &str) -> io::Result<()> {
         writeln!(self.out, "@256")?;
         writeln!(self.out, "D=A")?;
         writeln!(self.out, "@SP")?;
         writeln!(self.out, "M=D")?;
-        self.write_call("Sys.init", 0)?;
+        self.write_call(entrypoint, 0)?;
         Ok(())
     }
 
