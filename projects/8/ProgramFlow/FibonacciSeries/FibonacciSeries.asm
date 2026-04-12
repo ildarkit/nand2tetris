@@ -228,6 +228,3 @@ M=D
 @FibonacciSeries$LOOP
 0;JMP
 (FibonacciSeries$END)
-(END)
-@END
-0;JMP
