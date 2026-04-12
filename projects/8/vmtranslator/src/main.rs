@@ -53,8 +53,16 @@ fn entry_process(entry_path: &Path, writer: &mut CodeWriter) -> io::Result<()> {
     Ok(())
 }
 
-fn file_path_stem(path: &Path) -> Option<&str> {
-    path.file_stem().and_then(|s| s.to_str())
+fn file_path_stem(path: &Path) -> io::Result<&str> {
+    path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or(
+            io::Error::new(
+                io::ErrorKind::Other,
+                "file_path_stem returned None"
+            )
+        )
 }
 
 fn main() -> io::Result<()> {
@@ -68,28 +76,31 @@ fn main() -> io::Result<()> {
         path.with_extension("asm")
     };
 
-    if let Some(file_stem) = file_path_stem(path) {
-        let mut writer = CodeWriter::new(&out_path, file_stem)?;
-        writer.bootstrap("Sys.init")?;
+    let file_stem = file_path_stem(path)?;
+    let mut writer = CodeWriter::new(&out_path, file_stem)?;
+    writer.bootstrap("Sys.init")?;
 
-        if path.is_dir() {
-            for entry in path.read_dir()? {
-                let entry_path = entry?.path();
-                if let Some(ext) = entry_path.extension() {
-                    if ext == "vm" {
-                        if let Some(entry_file_stem) = file_path_stem(&entry_path) {
-                            writer.set_file_name(entry_file_stem);
-                            entry_process(&entry_path, &mut writer)?;
-                        }
+    if path.is_dir() {
+        for entry in path.read_dir()? {
+            entry
+                .map(|e| e.path())
+                .map(|entry_path| {
+                    match entry_path.extension() {
+                        Some(ext) if ext == "vm" => {
+                            file_path_stem(&entry_path)
+                                .map(|file_stem| {
+                                    writer.set_file_name(file_stem);
+                                    entry_process(&entry_path, &mut writer)
+                                })?
+                        },
+                        _ => Ok(()),
                     }
-                }
-            }
-        } else {
-            entry_process(path, &mut writer)?;
-        };
-
-        writer.close()?;
+                })??;
+        }
+    } else {
+        entry_process(path, &mut writer)?;
     }
+    writer.close()?;
     Ok(())
 }
 
