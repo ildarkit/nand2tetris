@@ -136,8 +136,10 @@ impl CodeWriter {
         self.push_stack()?;
 
         writeln!(self.out, "@SP")?; // ARG
-        writeln!(self.out, "D=M")?;
-        if nargs > 0 {
+        if nargs == 0 {
+            writeln!(self.out, "D=M-1")?;
+        } else {
+            writeln!(self.out, "D=M")?;
             writeln!(self.out, "@{}", nargs)?;
             writeln!(self.out, "D=D-A")?;
         }
