@@ -6,6 +6,7 @@ use std::path::Path;
 
 mod parser;
 mod codewriter;
+mod hack;
 
 use parser::Parser;
 use codewriter::CodeWriter;
