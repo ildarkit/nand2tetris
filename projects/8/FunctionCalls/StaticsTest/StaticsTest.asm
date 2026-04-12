@@ -297,8 +297,9 @@ M=D
 @Class2.get
 0;JMP
 (Sys.init$ret.3)
+// label Sys.init$END
 (Sys.init$END)
-// goto END
+// goto Sys.init$END
 @Sys.init$END
 0;JMP
 // function Class2.set 0
