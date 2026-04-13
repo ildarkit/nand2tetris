@@ -39,7 +39,7 @@ M=D
 @SP
 M=M+1
 @SP
-D=M-1
+D=M
 @5
 D=D-A
 @ARG
@@ -90,15 +90,16 @@ M=0
 A=M-1
 M=-1
 (Main_END_0)
-// if-goto N_LT_2
+// if-goto Main.fibonacci$N_LT_2
 @SP
 AM=M-1
 D=M
 @Main.fibonacci$N_LT_2
 D;JNE
-// goto N_GE_2
+// goto Main.fibonacci$N_GE_2
 @Main.fibonacci$N_GE_2
 0;JMP
+// label Main.fibonacci$N_LT_2
 (Main.fibonacci$N_LT_2)
 // push argument 0
 @ARG
@@ -112,6 +113,15 @@ M=D
 @SP
 M=M+1
 // return Main.fibonacci
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
 @SP
 AM=M-1
 D=M
@@ -122,10 +132,6 @@ M=D
 D=M
 @SP
 M=D+1
-@LCL
-D=M
-@R13
-M=D
 @R13
 D=M
 @1
@@ -154,12 +160,11 @@ A=D-A
 D=M
 @LCL
 M=D
-@R13
+@R14
 D=M
-@5
-A=D-A
-A=M
+A=D
 0;JMP
+// label Main.fibonacci$N_GE_2
 (Main.fibonacci$N_GE_2)
 // push argument 0
 @ARG
@@ -320,6 +325,15 @@ D=M
 A=A-1
 M=M+D
 // return Main.fibonacci
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
 @SP
 AM=M-1
 D=M
@@ -330,10 +344,6 @@ M=D
 D=M
 @SP
 M=D+1
-@LCL
-D=M
-@R13
-M=D
 @R13
 D=M
 @1
@@ -362,11 +372,9 @@ A=D-A
 D=M
 @LCL
 M=D
-@R13
+@R14
 D=M
-@5
-A=D-A
-A=M
+A=D
 0;JMP
 // function Sys.init 0
 (Sys.init)
@@ -429,7 +437,8 @@ M=D
 @Main.fibonacci
 0;JMP
 (Sys.init$ret.0)
+// label Sys.init$END
 (Sys.init$END)
-// goto END
+// goto Sys.init$END
 @Sys.init$END
 0;JMP

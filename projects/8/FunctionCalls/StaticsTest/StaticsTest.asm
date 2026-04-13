@@ -39,7 +39,7 @@ M=D
 @SP
 M=M+1
 @SP
-D=M-1
+D=M
 @5
 D=D-A
 @ARG
@@ -236,7 +236,7 @@ M=D
 @SP
 M=M+1
 @SP
-D=M-1
+D=M
 @5
 D=D-A
 @ARG
@@ -285,7 +285,7 @@ M=D
 @SP
 M=M+1
 @SP
-D=M-1
+D=M
 @5
 D=D-A
 @ARG
@@ -347,6 +347,15 @@ M=D
 @SP
 M=M+1
 // return Class2.set
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
 @SP
 AM=M-1
 D=M
@@ -357,10 +366,6 @@ M=D
 D=M
 @SP
 M=D+1
-@LCL
-D=M
-@R13
-M=D
 @R13
 D=M
 @1
@@ -389,11 +394,9 @@ A=D-A
 D=M
 @LCL
 M=D
-@R13
+@R14
 D=M
-@5
-A=D-A
-A=M
+A=D
 0;JMP
 // function Class2.get 0
 (Class2.get)
@@ -420,6 +423,15 @@ D=M
 A=A-1
 M=M-D
 // return Class2.get
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
 @SP
 AM=M-1
 D=M
@@ -430,10 +442,6 @@ M=D
 D=M
 @SP
 M=D+1
-@LCL
-D=M
-@R13
-M=D
 @R13
 D=M
 @1
@@ -462,11 +470,9 @@ A=D-A
 D=M
 @LCL
 M=D
-@R13
+@R14
 D=M
-@5
-A=D-A
-A=M
+A=D
 0;JMP
 // function Class1.set 0
 (Class1.set)
@@ -513,6 +519,15 @@ M=D
 @SP
 M=M+1
 // return Class1.set
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
 @SP
 AM=M-1
 D=M
@@ -523,10 +538,6 @@ M=D
 D=M
 @SP
 M=D+1
-@LCL
-D=M
-@R13
-M=D
 @R13
 D=M
 @1
@@ -555,11 +566,9 @@ A=D-A
 D=M
 @LCL
 M=D
-@R13
+@R14
 D=M
-@5
-A=D-A
-A=M
+A=D
 0;JMP
 // function Class1.get 0
 (Class1.get)
@@ -586,6 +595,15 @@ D=M
 A=A-1
 M=M-D
 // return Class1.get
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
 @SP
 AM=M-1
 D=M
@@ -596,10 +614,6 @@ M=D
 D=M
 @SP
 M=D+1
-@LCL
-D=M
-@R13
-M=D
 @R13
 D=M
 @1
@@ -628,9 +642,7 @@ A=D-A
 D=M
 @LCL
 M=D
-@R13
+@R14
 D=M
-@5
-A=D-A
-A=M
+A=D
 0;JMP
