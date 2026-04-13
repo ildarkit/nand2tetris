@@ -102,10 +102,8 @@ impl HackWriter {
         self.push_stack()?;
 
         writeln!(self.out, "@SP")?; // ARG
-        if nargs == 0 {
-            writeln!(self.out, "D=M-1")?;
-        } else {
-            writeln!(self.out, "D=M")?;
+        writeln!(self.out, "D=M")?;
+        if nargs > 0 {
             writeln!(self.out, "@{}", nargs)?;
             writeln!(self.out, "D=D-A")?;
         }
@@ -129,6 +127,17 @@ impl HackWriter {
     pub fn write_return(&mut self, function: &str) -> io::Result<()> {
         writeln!(self.out, "// return {}", function)?;
 
+        writeln!(self.out, "@LCL")?; // store LCL segment address
+        writeln!(self.out, "D=M")?;
+        writeln!(self.out, "@R13")?;
+        writeln!(self.out, "M=D")?;
+
+        writeln!(self.out, "@5")?; // store return address
+        writeln!(self.out, "A=D-A")?;
+        writeln!(self.out, "D=M")?;
+        writeln!(self.out, "@R14")?;
+        writeln!(self.out, "M=D")?;
+
         writeln!(self.out, "@SP")?; // return to ARG 0
         writeln!(self.out, "AM=M-1")?;
         writeln!(self.out, "D=M")?;
@@ -140,11 +149,6 @@ impl HackWriter {
         writeln!(self.out, "D=M")?;
         writeln!(self.out, "@SP")?; 
         writeln!(self.out, "M=D+1")?;
-
-        writeln!(self.out, "@LCL")?; // store LCL segment address
-        writeln!(self.out, "D=M")?;
-        writeln!(self.out, "@R13")?;
-        writeln!(self.out, "M=D")?;
 
         let segment = vec!["THAT", "THIS", "ARG", "LCL"]; // restore segment address
         let mut i = 1;
@@ -159,11 +163,9 @@ impl HackWriter {
             i += 1;
         }
 
-        writeln!(self.out, "@R13")?; // goto return address
+        writeln!(self.out, "@R14")?; // goto return address
         writeln!(self.out, "D=M")?;
-        writeln!(self.out, "@5")?;
-        writeln!(self.out, "A=D-A")?;
-        writeln!(self.out, "A=M")?;
+        writeln!(self.out, "A=D")?;
         writeln!(self.out, "0;JMP")?;
         Ok(())
     }
