@@ -74,6 +74,9 @@ impl HackWriter {
                     writeln!(self.out, "A=A+1")?;
                 }
             }
+            writeln!(self.out, "D=A+1")?;
+            writeln!(self.out, "@SP")?;
+            writeln!(self.out, "M=D")?;
         }
         Ok(())
     }
