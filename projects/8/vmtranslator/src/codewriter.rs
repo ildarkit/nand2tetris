@@ -39,17 +39,12 @@ impl CodeWriter {
         self.current_calls = 0;
     }
 
-    fn caller_name(&self) -> String {
+    fn caller_name(&self) -> &str {
         if let Some(ref caller) = self.current_caller {
-            caller.clone()
+            caller
         } else {
-            self.file_name.clone()
+            &self.file_name
         }
-    }
-
-    fn return_address(&self) -> String {
-        let label = self.caller_name();
-        format!("{}$ret.{}", label, self.current_calls)
     }
 
     pub fn set_file_name(&mut self, filename: &str) {
@@ -57,20 +52,20 @@ impl CodeWriter {
     }
 
     pub fn write_label(&mut self, label: &str) -> io::Result<()> {
-        let new_label = format!("{}${}", self.caller_name(), label);
-        self.writer.write_label(&new_label)?;
+        let caller_name = self.caller_name().to_string();
+        self.writer.write_label(&caller_name, label)?;
         Ok(())
     }
 
     pub fn write_goto(&mut self, label: &str) -> io::Result<()> {
-        let goto_label = format!("{}${}", self.caller_name(), label);
-        self.writer.write_goto(&goto_label)?;
+        let caller_name = self.caller_name().to_string();
+        self.writer.write_goto(&caller_name, label)?;
         Ok(())
     }
 
     pub fn write_if(&mut self, label: &str) -> io::Result<()> {
-        let iflabel = format!("{}${}", self.caller_name(), label);
-        self.writer.write_if(&iflabel)?;
+        let caller_name = self.caller_name().to_string();
+        self.writer.write_if(&caller_name, label)?;
         Ok(())
     }
 
@@ -81,7 +76,8 @@ impl CodeWriter {
     }
 
     pub fn write_call(&mut self, function_name: &str, nargs: u32) -> io::Result<()> {
-        self.writer.write_call(function_name, nargs, &self.return_address())?;
+        let caller_name = self.caller_name().to_string();
+        self.writer.write_call(function_name, nargs, &caller_name, self.current_calls)?;
         self.current_calls += 1;
         Ok(())
     }

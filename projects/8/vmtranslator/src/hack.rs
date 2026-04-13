@@ -35,25 +35,28 @@ impl HackWriter {
         Ok(())
     }
 
-    pub fn write_label(&mut self, label: &str) -> io::Result<()> {
-        writeln!(self.out, "// label {}", label)?;
-        writeln!(self.out, "({})", label)?;
+    pub fn write_label(&mut self, caller_name: &str, label: &str) -> io::Result<()> {
+        let full_label = format!("{}${}", caller_name, label);
+        writeln!(self.out, "// label {}", full_label)?;
+        writeln!(self.out, "({})", full_label)?;
         Ok(())
     }
 
-    pub fn write_goto(&mut self, label: &str) -> io::Result<()> {
-        writeln!(self.out, "// goto {}", label)?;
-        writeln!(self.out, "@{}", label)?;
+    pub fn write_goto(&mut self, caller_name: &str, label: &str) -> io::Result<()> {
+        let full_label = format!("{}${}", caller_name, label);
+        writeln!(self.out, "// goto {}", full_label)?;
+        writeln!(self.out, "@{}", full_label)?;
         writeln!(self.out, "0;JMP")?;
         Ok(())
     }
 
-    pub fn write_if(&mut self, label: &str) -> io::Result<()> {
-        writeln!(self.out, "// if-goto {}", label)?;
+    pub fn write_if(&mut self, caller_name: &str, label: &str) -> io::Result<()> {
+        let full_label = format!("{}${}", caller_name, label);
+        writeln!(self.out, "// if-goto {}", full_label)?;
         writeln!(self.out, "@SP")?;
         writeln!(self.out, "AM=M-1")?; // SP--, A=SP
         writeln!(self.out, "D=M")?;    // D = y
-        writeln!(self.out, "@{}", label)?;
+        writeln!(self.out, "@{}", full_label)?;
         writeln!(self.out, "D;JNE")?;
         Ok(())
     }
@@ -85,8 +88,10 @@ impl HackWriter {
         &mut self,
         function_name: &str,
         nargs: u32,
-        return_address: &str) -> io::Result<()>
+        caller_name: &str,
+        current_calls: u32) -> io::Result<()>
     {
+        let return_address = format!("{}$ret.{}", caller_name, current_calls);
         writeln!(self.out, "// call {} {}", function_name, nargs)?;
         writeln!(self.out, "@{}", return_address)?; // store segments address in stack
         writeln!(self.out, "D=A")?;
