@@ -1,56 +1,3 @@
-@256
-D=A
-@SP
-M=D
-// call Sys.init 0
-@NestedCall$ret.0
-D=A
-@SP
-A=M
-M=D
-@SP
-M=M+1
-@LCL
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-@ARG
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-@THIS
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-@THAT
-D=M
-@SP
-A=M
-M=D
-@SP
-M=M+1
-@SP
-D=M-1
-@5
-D=D-A
-@ARG
-M=D
-@SP
-D=M
-@LCL
-M=D
-@Sys.init
-0;JMP
-(NestedCall$ret.0)
 // function Sys.init 0
 (Sys.init)
 // push constant 4000
@@ -118,7 +65,7 @@ M=D
 @SP
 M=M+1
 @SP
-D=M-1
+D=M
 @5
 D=D-A
 @ARG
@@ -136,8 +83,9 @@ AM=M-1
 D=M
 @6
 M=D
+// label Sys.init$LOOP
 (Sys.init$LOOP)
-// goto LOOP
+// goto Sys.init$LOOP
 @Sys.init$LOOP
 0;JMP
 // function Sys.main 5
@@ -154,6 +102,9 @@ M=D
 A=A+1
 M=D
 A=A+1
+M=D
+D=A+1
+@SP
 M=D
 // push constant 4001
 @4001
@@ -391,6 +342,15 @@ D=M
 A=A-1
 M=M+D
 // return Sys.main
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
 @SP
 AM=M-1
 D=M
@@ -401,10 +361,6 @@ M=D
 D=M
 @SP
 M=D+1
-@LCL
-D=M
-@R13
-M=D
 @R13
 D=M
 @1
@@ -433,11 +389,9 @@ A=D-A
 D=M
 @LCL
 M=D
-@R13
+@R14
 D=M
-@5
-A=D-A
-A=M
+A=D
 0;JMP
 // function Sys.add12 0
 (Sys.add12)
@@ -495,6 +449,15 @@ D=M
 A=A-1
 M=M+D
 // return Sys.add12
+@LCL
+D=M
+@R13
+M=D
+@5
+A=D-A
+D=M
+@R14
+M=D
 @SP
 AM=M-1
 D=M
@@ -505,10 +468,6 @@ M=D
 D=M
 @SP
 M=D+1
-@LCL
-D=M
-@R13
-M=D
 @R13
 D=M
 @1
@@ -537,9 +496,7 @@ A=D-A
 D=M
 @LCL
 M=D
-@R13
+@R14
 D=M
-@5
-A=D-A
-A=M
+A=D
 0;JMP
