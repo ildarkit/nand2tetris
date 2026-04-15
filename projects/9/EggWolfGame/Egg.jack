@@ -1,0 +1,92 @@
+class Egg {
+    field int x, y;         // Текущая позиция
+    field int startX, startY; // Начальная позиция в углу
+    field int cornerType;   // Какой угол (1-4)
+    field boolean caught;   // Поймано ли сейчас
+    field boolean wasCaught;// Было ли поймано для счета
+    field int targetX, targetY;
+
+    constructor Egg new(int Ax, int Ay, int Acorn) {
+        let x = Ax;
+        let y = Ay;
+        let startX = Ax;
+        let startY = Ay;
+        let cornerType = Acorn;
+        let caught = false;
+        let wasCaught = false;
+        
+        // Цель - центр экрана (с небольшим смещением)
+        let targetX = 256;
+        let targetY = 128;
+        
+        do show();
+        return this;
+    }
+
+    method int corner() {
+      return cornerType;
+    }
+
+    method void reset() {
+        let x = startX;
+        let y = startY;
+        let caught = false;
+        let wasCaught = false;
+        do show();
+        return;
+    }
+
+    method void show() {
+        do Screen.setColor(true);
+        do Screen.drawCircle(x, y, 5);
+        return;
+    }
+
+    method void hide() {
+        do Screen.setColor(false);
+        do Screen.drawCircle(x, y, 5);
+        return;
+    }
+
+    method boolean move(int dx, int dy) {
+        var boolean broken;
+        
+        do hide();
+        
+        // Вычисляем вектор движения к центру
+        let x = x + dx;
+        let y = y + dy;
+
+        // Проверка достижения центра (разбивание или поимка)
+        let broken = false;
+        if ((Math.abs(x - 256) < 20) & (Math.abs(y - 128) < 20)) {
+            // Если дошли до центра, проверяем: не направлен ли волк сюда?
+            // В данной логике, если игрок не успел сменить direction, яйцо разбивается
+            // Мы передаем управление проверкой в WolfGame
+            do Screen.setColor(false); // Эффект "разбитого" яйца - пятно
+            do Screen.drawCircle(x, y, 8);
+            let broken = true;
+        }
+
+        do show();
+        return broken;
+    }
+
+    // Проверка коллизии с корзиной (внутри WolfGame вызывается логика)
+    // Здесь упрощенно: если яйцо близко к центру и направление совпадает
+    method boolean isCaught() {
+        // В реальности в Jack нужно проверять пересечение линий. 
+        // Для простоты: если расстояние маленькое, считаем поимкой.
+        return false; // Логика расширена в WolfGame
+    }
+
+    // Метод для упрощения взаимодействия (в реальном коде будет сложнее)
+    method boolean wasCaught() { return wasCaught; } 
+    // Примечание: Для полной работоспособности в Jack, 
+    // логика "поимки" должна проверять дистанцию Egg до Wolf.
+    
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+}

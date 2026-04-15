@@ -1,0 +1,44 @@
+class Wolf {
+    field int x, y;
+    field int direction; // 1: TL, 2: TR, 3: BL, 4: BR
+
+    constructor Wolf new(int Ax, int Ay) {
+        let x = Ax;
+        let y = Ay;
+        let direction = 1;
+        do show();
+        return this;
+    }
+
+    method void setDirection(int Adir) {
+        let direction = Adir;
+        do show(); // Перерисовываем для анимации поворота
+        return;
+    }
+
+    method void show() {
+        // Сначала стираем старую позицию (упрощенно через отрисовку черным)
+        do hide();
+        do Screen.setColor(true);
+        do Screen.drawRectangle(x-10, y-10, x+10, y+10); // Тело
+        
+        // Рисуем корзину (линия в зависимости от направления)
+        do Screen.setColor(false);
+        if (direction = 1) { do Screen.drawLine(x, y, x-15, y-15); }
+        if (direction = 2) { do Screen.drawLine(x, y, x+15, y-15); }
+        if (direction = 3) { do Screen.drawLine(x, y, x-15, y+15); }
+        if (direction = 4) { do Screen.drawLine(x, y, x+15, y+15); }
+        return;
+    }
+
+    method void hide() {
+        do Screen.setColor(false);
+        do Screen.drawRectangle(x-15, y-15, x+15, y+15);
+        return;
+    }
+
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+}

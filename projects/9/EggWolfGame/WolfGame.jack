@@ -1,0 +1,103 @@
+class WolfGame {
+    field Wolf wolf;
+    field Egg egg1, egg2, egg3, egg4;
+    field int score;
+    field boolean exit;
+   field int direction; 
+
+    constructor WolfGame new() {
+        let score = 0;
+        let exit = false;
+        let wolf = Wolf.new(256, 128);
+        // Создаем яйца из четырех углов: (x, y)
+        let egg1 = Egg.new(10, 10, 1);  // Верхний левый
+        let egg2 = Egg.new(501, 10, 2); // Верхний правый
+        let egg3 = Egg.new(10, 245, 3); // Нижний левый
+        let egg4 = Egg.new(501, 245, 4);// Нижний правый
+        return this;
+    }
+
+   method void moveObjects() {
+      do wolf.setDirection(direction);
+      do checkEgg(egg1);
+      do checkEgg(egg2);
+      do checkEgg(egg3);
+      do checkEgg(egg4);
+      do Sys.wait(60);  // delays the next movement
+      return;
+   }
+
+    method void run() {
+        var char key;
+        do Screen.clearScreen();
+        do Output.moveCursor(0, 29);
+        do Output.printString("Score: 0");
+
+        while (~exit) {
+          while (key = 0) {
+            let key = Keyboard.keyPressed();
+            do moveObjects();
+          }
+            // Управление волком (a, z, s, x)
+          if (key = 81) { let exit = true; }     // q key
+          if (key = 97) { let direction = 1; } // 'a' - top-left
+          if (key = 122) { let direction = 3; } // 'z' - bottom-left
+          if (key = 115) { let direction = 2; } // 's' - top-right
+          if (key = 120) { let direction = 4; } // 'x' - bottom-right
+
+            // Движение яиц и проверка коллизий
+          while (~(key = 0)) {
+            let key = Keyboard.keyPressed();
+            do moveObjects();
+          }
+        }
+
+        do Output.moveCursor(22, 25);
+        do Output.printString("GAME OVER");
+        return;
+    }
+
+    method void checkEgg(Egg e) {
+        var boolean caught;
+        var int dx, dy;
+        let dx = 4;
+        let dy = 2;
+        if (e.corner() = 2) {
+          let dx = -dx;
+        }
+        if (e.corner() = 3) {
+          let dy = -dy;
+        }
+        if (e.corner() = 4) {
+          let dx = -dx;
+          let dy = -dy;
+        }
+        let caught = e.move(dx, dy); // Возвращает true если разбилось, false если поймано
+
+        if (caught) {
+            // Если яйцо достигло центра и не было поймано - конец игры
+            if (~(e.isCaught())) {
+                let exit = true;
+            }
+        } else {
+            // Если поймано
+            if (e.wasCaught()) {
+                let score = score + 1;
+                do Output.moveCursor(0, 36);
+                do Output.printInt(score);
+                do e.reset(); // Возрождаем яйцо в углу
+            }
+        }
+        return;
+    }
+
+    method void dispose() {
+      do wolf.dispose();
+      do egg1.dispose();
+      do egg2.dispose();
+      do egg3.dispose();
+      do egg4.dispose();
+      do Memory.deAlloc(this);
+      return;
+    }
+}
