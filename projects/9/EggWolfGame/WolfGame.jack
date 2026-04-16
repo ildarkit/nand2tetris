@@ -1,37 +1,82 @@
 class WolfGame {
     field Wolf wolf;
-    field Egg egg1, egg2, egg3, egg4;
+    field int eggsCount;
+    field int eggNum;
+    field Array eggs;
+    field Array eggProps;
+    field Random random;
     field int score;
     field boolean exit;
-   field int direction; 
+    field int direction; 
 
     constructor WolfGame new() {
         let score = 0;
         let exit = false;
         let wolf = Wolf.new(256, 128);
-        // Создаем яйца из четырех углов: (x, y)
-        let egg1 = Egg.new(10, 10, 1);  // Верхний левый
-        let egg2 = Egg.new(501, 10, 2); // Верхний правый
-        let egg3 = Egg.new(10, 245, 3); // Нижний левый
-        let egg4 = Egg.new(501, 245, 4);// Нижний правый
+        let eggsCount = 8;
+        let eggNum = 0;
+        let eggs = Array.new(eggsCount);
+        let eggProps = Array.new(3);
+        let random = Random.new(1311);
         return this;
     }
 
    method void moveObjects() {
+      var int i;
+      let i = 0;
       do wolf.setDirection(direction);
-      do checkEgg(egg1);
-      do checkEgg(egg2);
-      do checkEgg(egg3);
-      do checkEgg(egg4);
-      do Sys.wait(60);  // delays the next movement
+      do appendEgg();
+      while (i < eggsCount) {
+        if (~(eggs[i] = null)) {
+          do checkEgg(eggs[i], i);
+        }
+        let i = i + 1;
+      }
+      do Sys.wait(70);  // delays the next movement
       return;
+   }
+
+   method void spawnEgg() {
+     var int r, x, y;
+     let r = random.nextInt(4) | 1;
+     if (r = 1) {
+       let x = 10;
+       let y = 10;
+     }
+     if (r = 2) {
+       let x = 501;
+       let y = 10;
+     }
+     if (r = 3) {
+       let x = 10;
+       let y = 245;
+     }
+     if (r = 4) {
+       let x = 501;
+       let y = 245;
+     }
+     let eggProps[0] = x;
+     let eggProps[1] = y;
+     let eggProps[2] = r;
+     return;
+   }
+
+   method void appendEgg() {
+     if (eggNum < eggsCount) {
+       do spawnEgg();
+       let eggs[eggNum] = Egg.new(eggProps[0], eggProps[1], eggProps[2]);
+       let eggNum = eggNum + 1;
+     }
+     return;
    }
 
     method void run() {
         var char key;
+
         do Screen.clearScreen();
         do Output.moveCursor(0, 29);
         do Output.printString("Score: 0");
+        do appendEgg();
 
         while (~exit) {
           while (key = 0) {
@@ -57,7 +102,7 @@ class WolfGame {
         return;
     }
 
-    method void checkEgg(Egg e) {
+    method void checkEgg(Egg e, int i) {
         var boolean caught;
         var int dx, dy;
         let dx = 4;
@@ -85,18 +130,27 @@ class WolfGame {
                 let score = score + 1;
                 do Output.moveCursor(0, 36);
                 do Output.printInt(score);
-                do e.reset(); // Возрождаем яйцо в углу
+                do spawnEgg();
+                do e.reset(eggProps[0], eggProps[1], eggProps[2]); // Возрождаем яйцо в углу
             }
         }
         return;
     }
 
     method void dispose() {
+      var Egg e;
+      var int i;
+      let i = 0;
+      while (i < eggsCount) {
+        if (~(eggs[i] = null)) {
+          let e = eggs[i];
+          do e.dispose();
+        }
+        let i = i + 1;
+      }
+      do eggs.dispose();
+      do eggProps.dispose();
       do wolf.dispose();
-      do egg1.dispose();
-      do egg2.dispose();
-      do egg3.dispose();
-      do egg4.dispose();
       do Memory.deAlloc(this);
       return;
     }

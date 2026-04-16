@@ -27,9 +27,10 @@ class Egg {
       return cornerType;
     }
 
-    method void reset() {
-        let x = startX;
-        let y = startY;
+    method void reset(int newX, int newY, int corner) {
+        let x = newX;
+        let y = newY;
+        let cornerType = corner;
         let caught = false;
         let wasCaught = false;
         do show();
