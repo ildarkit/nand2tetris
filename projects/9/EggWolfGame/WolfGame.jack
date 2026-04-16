@@ -8,6 +8,7 @@ class WolfGame {
     field int score;
     field boolean exit;
     field int direction; 
+    field int counter;
 
     constructor WolfGame new() {
         let score = 0;
@@ -15,9 +16,10 @@ class WolfGame {
         let wolf = Wolf.new(256, 128);
         let eggsCount = 8;
         let eggNum = 0;
+        let counter = 0;
         let eggs = Array.new(eggsCount);
         let eggProps = Array.new(3);
-        let random = Random.new(1311);
+        let random = Random.new(11395);
         return this;
     }
 
@@ -25,7 +27,6 @@ class WolfGame {
       var int i;
       let i = 0;
       do wolf.setDirection(direction);
-      do appendEgg();
       while (i < eggsCount) {
         if (~(eggs[i] = null)) {
           do checkEgg(eggs[i], i);
@@ -38,7 +39,10 @@ class WolfGame {
 
    method void spawnEgg() {
      var int r, x, y;
-     let r = random.nextInt(4) | 1;
+     let r = 0;
+     while (r = 0) {
+      let r = random.nextInt(5);
+     }
      if (r = 1) {
        let x = 10;
        let y = 10;
@@ -70,17 +74,36 @@ class WolfGame {
      return;
    }
 
+   method void randomEgg() {
+      var int steps, c, r;
+      var int rand;
+      let steps = 10;
+      let c = counter / steps;
+      let r = counter - (c * steps);
+
+      if (r = 0) {
+        let rand = random.nextInt(3);
+        if (rand = 1) {
+          do appendEgg();
+        }
+      }
+      return;
+   }
+
     method void run() {
         var char key;
 
+        do appendEgg();
         do Screen.clearScreen();
         do Output.moveCursor(0, 29);
         do Output.printString("Score: 0");
-        do appendEgg();
+        let counter = 0;
 
         while (~exit) {
           while (key = 0) {
+            let counter = (counter + 1) & 32767;
             let key = Keyboard.keyPressed();
+            do randomEgg();
             do moveObjects();
           }
             // Управление волком (a, z, s, x)
@@ -92,12 +115,18 @@ class WolfGame {
 
             // Движение яиц и проверка коллизий
           while (~(key = 0)) {
+            let counter = (counter + 1) & 32767;
+            do random.setSeed(counter);
             let key = Keyboard.keyPressed();
+            do randomEgg();
             do moveObjects();
+          }
+          if (counter = 32767) {
+            let counter = 0;
           }
         }
 
-        do Output.moveCursor(22, 25);
+        do Output.moveCursor(22, 28);
         do Output.printString("GAME OVER");
         return;
     }
