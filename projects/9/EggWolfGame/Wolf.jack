@@ -1,11 +1,16 @@
 class Wolf {
     field int x, y;
     field int direction; // 1: TL, 2: TR, 3: BL, 4: BR
+    field int xDirection, yDirection;
+    field int size;
+    field int basket;
 
     constructor Wolf new(int Ax, int Ay, int dir) {
         let x = Ax;
         let y = Ay;
         let direction = dir;
+        let size = 15;
+        let basket = 10;
         do show();
         return this;
     }
@@ -23,20 +28,50 @@ class Wolf {
         // Сначала стираем старую позицию (упрощенно через отрисовку черным)
         do hide();
         do Screen.setColor(true);
-        do Screen.drawRectangle(x-10, y-10, x+10, y+10); // Тело
+        do Screen.drawRectangle(x-size, y-size, x+size, y+size); // Тело
         
         // Рисуем корзину (линия в зависимости от направления)
-        do Screen.setColor(false);
-        if (direction = 1) { do Screen.drawLine(x, y, x-15, y-15); }
-        if (direction = 2) { do Screen.drawLine(x, y, x+15, y-15); }
-        if (direction = 3) { do Screen.drawLine(x, y, x-15, y+15); }
-        if (direction = 4) { do Screen.drawLine(x, y, x+15, y+15); }
+        do position();
+        do Screen.drawCircle(x+xDirection, y+yDirection, basket);
         return;
+    }
+
+    method int distance() {
+      return size + (basket / 2);
+    }
+
+    method int direction() {
+      return direction;
+    }
+
+    method void position() {
+      var int xPos, yPos, dist;
+      let dist = distance();
+      let xPos = dist;
+      let yPos = dist;
+      if (direction = 1) {
+       let xDirection = -xPos;
+       let yDirection = -yPos;
+      }
+      if (direction = 2) {
+       let xDirection = xPos;
+       let yDirection = -yPos;
+      }
+      if (direction = 3) {
+       let xDirection = -xPos;
+       let yDirection = yPos;
+      }
+      if (direction = 4) {
+       let xDirection = xPos;
+       let yDirection = yPos;
+      }
+      return;
     }
 
     method void hide() {
         do Screen.setColor(false);
-        do Screen.drawRectangle(x-15, y-15, x+15, y+15);
+        do Screen.drawCircle(x+xDirection, y+yDirection, basket);
+        do Screen.drawRectangle(x-size, y-size, x+size, y+size);
         return;
     }
 
