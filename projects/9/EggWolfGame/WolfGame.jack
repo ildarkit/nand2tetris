@@ -13,7 +13,7 @@ class WolfGame {
     constructor WolfGame new() {
         let score = 0;
         let exit = false;
-        let eggsCount = 8;
+        let eggsCount = 7;
         let eggNum = 0;
         let counter = 0;
         let direction = 1;
@@ -36,7 +36,7 @@ class WolfGame {
         }
         let i = i + 1;
       }
-      do Sys.wait(70);  // delays the next movement
+      do Sys.wait(100);  // delays the next movement
       return;
    }
 
@@ -161,6 +161,8 @@ class WolfGame {
                 do Output.moveCursor(0, 36);
                 do Output.printInt(score);
                 do spawnEgg();
+                do e.hide();
+                do wolf.show();
                 do e.reset(eggProps[0], eggProps[1], eggProps[2]);
             } else {
               let exit = true;

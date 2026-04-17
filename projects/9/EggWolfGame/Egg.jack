@@ -59,7 +59,7 @@ class Egg {
             // В данной логике, если игрок не успел сменить direction, яйцо разбивается
             // Мы передаем управление проверкой в WolfGame
             do Screen.setColor(false); // Эффект "разбитого" яйца - пятно
-            do Screen.drawCircle(x, y, 8);
+            do Screen.drawCircle(x, y, 5);
             let broken = true;
         }
 
