@@ -2,8 +2,6 @@ class Egg {
     field int x, y;         // Текущая позиция
     field int startX, startY; // Начальная позиция в углу
     field int cornerType;   // Какой угол (1-4)
-    field boolean caught;   // Поймано ли сейчас
-    field boolean wasCaught;// Было ли поймано для счета
     field int targetX, targetY;
 
     constructor Egg new(int Ax, int Ay, int Acorn) {
@@ -12,8 +10,6 @@ class Egg {
         let startX = Ax;
         let startY = Ay;
         let cornerType = Acorn;
-        let caught = false;
-        let wasCaught = false;
         
         // Цель - центр экрана (с небольшим смещением)
         let targetX = 256;
@@ -31,8 +27,6 @@ class Egg {
         let x = newX;
         let y = newY;
         let cornerType = corner;
-        let caught = false;
-        let wasCaught = false;
         do show();
         return;
     }
