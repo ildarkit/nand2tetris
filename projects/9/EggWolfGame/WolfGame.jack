@@ -13,10 +13,11 @@ class WolfGame {
     constructor WolfGame new() {
         let score = 0;
         let exit = false;
-        let wolf = Wolf.new(256, 128);
         let eggsCount = 8;
         let eggNum = 0;
         let counter = 0;
+        let direction = 1;
+        let wolf = Wolf.new(256, 128, direction);
         let eggs = Array.new(eggsCount);
         let eggProps = Array.new(3);
         let random = Random.new(11395);
@@ -94,7 +95,6 @@ class WolfGame {
         var char key;
 
         do appendEgg();
-        do Screen.clearScreen();
         do Output.moveCursor(0, 29);
         do Output.printString("Score: 0");
         let counter = 0;
@@ -108,10 +108,10 @@ class WolfGame {
           }
             // Управление волком (a, z, s, x)
           if (key = 81) { let exit = true; }     // q key
-          if (key = 97) { let direction = 1; } // 'a' - top-left
-          if (key = 122) { let direction = 3; } // 'z' - bottom-left
-          if (key = 115) { let direction = 2; } // 's' - top-right
-          if (key = 120) { let direction = 4; } // 'x' - bottom-right
+          if (key = 65) { let direction = 1; } // 'a' - top-left
+          if (key = 90) { let direction = 3; } // 'z' - bottom-left
+          if (key = 83) { let direction = 2; } // 's' - top-right
+          if (key = 88) { let direction = 4; } // 'x' - bottom-right
 
             // Движение яиц и проверка коллизий
           while (~(key = 0)) {

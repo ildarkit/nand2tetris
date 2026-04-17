@@ -2,15 +2,18 @@ class Wolf {
     field int x, y;
     field int direction; // 1: TL, 2: TR, 3: BL, 4: BR
 
-    constructor Wolf new(int Ax, int Ay) {
+    constructor Wolf new(int Ax, int Ay, int dir) {
         let x = Ax;
         let y = Ay;
-        let direction = 1;
+        let direction = dir;
         do show();
         return this;
     }
 
     method void setDirection(int Adir) {
+        if (direction = Adir) {
+          return;
+        }
         let direction = Adir;
         do show(); // Перерисовываем для анимации поворота
         return;
