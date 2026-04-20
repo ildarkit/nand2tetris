@@ -1,14 +1,38 @@
 // src/main.rs
 use std::env;
 use std::iter::once;
-use std::io;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
+use anyhow::Result;
 use rayon::prelude::*;
+use quick_xml::Writer;
+use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 
 const MESSAGE: &str = "usage: jackanalyzer <Dir/File.jack>";
 
-fn output_file(path: &Path) -> io::Result<PathBuf> {
-    path
+fn process_file(input: &PathBuf, output: PathBuf) -> Result<()> {
+    let input_file = File::open(input)?;
+    let reader = BufReader::new(input_file);
+
+    let output_file = File::create(output)?;
+    let mut writer = Writer::new(BufWriter::new(output_file));
+
+    writer.write_event(Event::Start(BytesStart::new("root")))?;
+
+    for line in reader.lines() {
+        let line = line?;
+        writer.write_event(Event::Start(BytesStart::new("line")))?;
+        writer.write_event(Event::Text(BytesText::new(&line)))?;
+        writer.write_event(Event::End(BytesEnd::new("line")))?;
+    }
+
+    writer.write_event(Event::End(BytesEnd::new("root")))?;
+    Ok(())
+}
+
+fn output_file(path: &Path) -> Result<PathBuf> {
+    Ok(path
         .parent()
         .map(|p| {
             path
@@ -25,10 +49,10 @@ fn output_file(path: &Path) -> io::Result<PathBuf> {
                 io::ErrorKind::InvalidInput,
                 format!("Не удалось получить имя выходного файла из пути: {:?}", path)
             )
-        })
+        })?)
 }
 
-fn main() -> io::Result<()> {
+fn main() -> Result<()> {
     let arg = env::args().nth(1).expect(MESSAGE);
     let path_arg = Path::new(&arg).canonicalize()?;
 
@@ -48,8 +72,10 @@ fn main() -> io::Result<()> {
         .par_iter()
         .for_each(|path| {
             match output_file(path) {
-                Ok(_output) => {
-                    todo!();
+                Ok(output) => {
+                    if let Err(e) = process_file(path, output) {
+                        eprintln!("Ошибка при обработке {:?}: {}", path, e);
+                    }
                 },
                 Err(e) => eprintln!("{}", e),
             }
