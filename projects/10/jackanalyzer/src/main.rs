@@ -31,11 +31,10 @@ fn output_file(path: &Path) -> io::Result<PathBuf> {
 fn main() -> io::Result<()> {
     let arg = env::args().nth(1).expect(MESSAGE);
     let path_arg = Path::new(&arg).canonicalize()?;
-    let source_path = path_arg.as_path();
 
-    let paths: Box<dyn Iterator<Item=PathBuf>> = if source_path.is_dir() {
+    let paths: Box<dyn Iterator<Item=PathBuf>> = if path_arg.is_dir() {
         Box::new(
-             source_path.read_dir()?
+             path_arg.read_dir()?
                 .filter_map(|res| res.ok().map(|e| e.path()))
         )
     } else {
