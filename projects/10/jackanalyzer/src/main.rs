@@ -47,7 +47,7 @@ fn process_file(input: &PathBuf, output: PathBuf) -> Result<()> {
                 value = tokenizer.string_val();
             },
             TokenType::EOF => continue,
-            TokenType::Invalid(token) => bail!("Невергый токен: {}", token),
+            TokenType::Invalid(token) => bail!("Неверный токен: {}", token),
         }
         writer.write_event(Event::Start(BytesStart::new(tag)))?;
         writer.write_event(Event::Text(BytesText::new(&value)))?;
