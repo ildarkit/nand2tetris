@@ -2,7 +2,7 @@ use std::io::{Write, BufRead};
 use anyhow::Result;
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
-use crate::jacktokenizer::JackTokenizer;
+use crate::tokenize::JackTokenizer;
 use crate::token::Token;
 
 pub struct XmlSerializer<W: Write> {

@@ -2,7 +2,7 @@ use std::io::{Write, BufRead};
 use anyhow::Result;
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use crate::jacktokenizer::{JackTokenizer, TokenType};
+use crate::tokenize::{JackTokenizer, TokenType};
 
 pub enum Token<'a> {
     Keyword(&'a str),

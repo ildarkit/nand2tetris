@@ -1,7 +1,7 @@
 // src/main.rs
-mod jacktokenizer;
+mod tokenize;
 mod token;
-mod xml_serialize;
+mod serialize;
 
 use std::env;
 use std::iter::once;
@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use either::Either;
 use rayon::prelude::*;
 use anyhow::Result;
-use crate::jacktokenizer::JackTokenizer;
-use crate::xml_serialize::XmlSerializer;
+use crate::tokenize::JackTokenizer;
+use crate::serialize::XmlSerializer;
 
 const MESSAGE: &str = "usage: jackanalyzer <Dir/File.jack>";
 
