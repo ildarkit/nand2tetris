@@ -63,7 +63,9 @@ impl <R: BufRead> JackTokenizer<R> {
 
     pub fn advance(&mut self) -> Result<bool> {
         if self.data.is_empty() {
-            self.read_line()?;
+            if !self.read_line()? {
+                return Ok(false);
+            }
             let data_ptr = self.data.as_ptr() as usize;
             self.index = 0;
             self.tokens.clear();
@@ -84,6 +86,8 @@ impl <R: BufRead> JackTokenizer<R> {
             self.current = Some(range.clone());
             self.index += 1;
             return Some(token);
+        } else {
+            self.data.clear();
         }
         self.current = None;
         None
@@ -100,7 +104,7 @@ impl <R: BufRead> JackTokenizer<R> {
                 "this" | "let" | "do" | "if" | "else" | "while" | "return" => {
                 TokenType::Keyword
             },
-            "{" | "}" | "(" | ")" | "[" | "]" | ". " | ", " | "; " | "+" | "-" | "*" | "/" |
+            "{" | "}" | "(" | ")" | "[" | "]" | "." | "," | ";" | "+" | "-" | "*" | "/" |
                 "&" | "|" | "<" | ">" | "=" | "~" => {
                 TokenType::Symbol
             },
