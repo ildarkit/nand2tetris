@@ -13,31 +13,12 @@ pub enum TokenType {
     Invalid(String),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Keyword {
-    Class,
-    Function,
-    Constructor,
-    Int,
-    Boolean,
-    Field,
-    Let,
-    Do,
-    If,
-    Else,
-    While,
-    Return,
-    True,
-    False,
-    Null,
-    This,
-}
-
 pub struct JackTokenizer<R: BufRead> {
     reader: R,
     data: String,
+    current: Option<Range<usize>>,
     tokens: Vec<Range<usize>>,
-    current: usize,
+    index: usize,
 }
 
 impl <R: BufRead> JackTokenizer<R> {
@@ -46,8 +27,9 @@ impl <R: BufRead> JackTokenizer<R> {
         Self {
             reader,
             data: String::new(),
+            current: None,
             tokens: Vec::new(),
-            current: 0,
+            index: 0,
         }
     }
 
@@ -70,7 +52,7 @@ impl <R: BufRead> JackTokenizer<R> {
         if self.data.is_empty() {
             self.read_line()?;
             let data_ptr = self.data.as_ptr() as usize;
-            self.current = 0;
+            self.index = 0;
             self.tokens.clear();
             let new_tokens = self.data
                 .split_whitespace()
@@ -84,10 +66,13 @@ impl <R: BufRead> JackTokenizer<R> {
     }
 
     fn next_token(&mut self) -> Option<&str> {
-        if let Some(range) = self.tokens.get(self.current) {
-            self.current += 1;
-            return Some(&self.data[range.clone()]);
+        if let Some(range) = self.tokens.get(self.index) {
+            let token = &self.data[range.clone()];
+            self.current = Some(range.clone());
+            self.index += 1;
+            return Some(token);
         }
+        self.current = None;
         None
     }
 
@@ -120,23 +105,29 @@ impl <R: BufRead> JackTokenizer<R> {
         }
     }
 
+    fn current_token(&self) -> &str {
+        let range = self.current.as_ref()
+            .expect("Сначала нужно вызвать метод token_type");
+        &self.data[range.clone()]
+    }
+
     pub fn keyword(&self) -> &str {
-        todo!();
+        self.current_token()
     }
 
     pub fn symbol(&self) -> &str {
-        todo!();
+        self.current_token()
     }
 
     pub fn identifier(&self) -> &str {
-        todo!();
+        self.current_token()
     }
 
     pub fn int_val(&self) -> &str {
-        todo!();
+        self.current_token()
     }
 
     pub fn string_val(&self) -> &str {
-        todo!();
+        self.current_token()
     }
 }
