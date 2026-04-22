@@ -6,8 +6,9 @@ use std::iter::once;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
-use anyhow::{Result, bail};
+use either::Either;
 use rayon::prelude::*;
+use anyhow::{Result, bail};
 use quick_xml::Writer;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use jacktokenizer::{JackTokenizer, TokenType};
@@ -58,14 +59,15 @@ fn process_file(input: &PathBuf, output: PathBuf) -> Result<()> {
 }
 
 fn output_file(path: &Path) -> Result<PathBuf> {
-    let path = path.parent()
-        .map(|p| {
+    let path = path
+        .parent()
+        .map(|parent| {
             path
                 .file_name()
                 .map(|name| {
                     let mut new_name = name.to_os_string();
                     new_name.push("T");
-                    p.join(Path::new(&new_name).with_extension("xml"))
+                    parent.join(Path::new(&new_name).with_extension("xml"))
                 })
         })
         .flatten()
@@ -82,13 +84,15 @@ fn main() -> Result<()> {
     let arg = env::args().nth(1).expect(MESSAGE);
     let path_arg = Path::new(&arg).canonicalize()?;
 
-    let paths: Box<dyn Iterator<Item=PathBuf>> = if path_arg.is_dir() {
-        Box::new(
-             path_arg.read_dir()?
-                .filter_map(|res| res.ok().map(|e| e.path()))
-        )
-    } else {
-        Box::new(once(path_arg))
+    let paths = match path_arg.is_dir() {
+        true => {
+            Either::Left(
+                path_arg
+                    .read_dir()?
+                    .filter_map(|res| res.ok().map(|e| e.path()))
+            )
+        },
+        false => Either::Right(once(path_arg))
     };
 
     let jack_files: Vec<_> = paths

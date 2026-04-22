@@ -44,6 +44,7 @@ name = "jackanalyzer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "either",
  "quick-xml",
  "rayon",
 ]
