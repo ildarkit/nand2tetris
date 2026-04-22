@@ -27,11 +27,10 @@ fn process_file(input: &PathBuf, output: PathBuf) -> Result<()> {
 }
 
 fn output_file(path: &Path) -> Result<PathBuf> {
-    let path = path
-        .parent()
+    Ok(path.parent()
         .map(|parent| {
             path
-                .file_name()
+                .file_stem()
                 .map(|name| {
                     let mut new_name = name.to_os_string();
                     new_name.push("T");
@@ -44,8 +43,8 @@ fn output_file(path: &Path) -> Result<PathBuf> {
                 io::ErrorKind::InvalidInput,
                 format!("Не удалось получить имя выходного файла из пути: {:?}", path)
             )
-        })?;
-    Ok(path)
+        })?
+    )
 }
 
 fn main() -> Result<()> {
