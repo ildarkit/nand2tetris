@@ -5,6 +5,10 @@ use quick_xml::events::{BytesEnd, BytesStart, Event};
 use crate::tokenize::JackTokenizer;
 use crate::token::Token;
 
+pub trait TokenSerializer {
+    fn serialize_all<R: BufRead>(&mut self, tokenizer: JackTokenizer<R>) -> Result<()>;
+}
+
 pub struct XmlSerializer<W: Write> {
     writer: Writer<W>,
 }
@@ -30,9 +34,11 @@ impl<W: Write> XmlSerializer<W> {
         token.write_to(&mut self.writer)?;
         Ok(())
     }
+}
 
-    pub fn serialize_all<R: BufRead>( &mut self, mut tokenizer: JackTokenizer<R>) -> Result<()>
-    {
+impl<W: Write> TokenSerializer for XmlSerializer<W> {
+
+    fn serialize_all<R: BufRead>( &mut self, mut tokenizer: JackTokenizer<R>) -> Result<()> {
         self.start_tag("tokens")?;
 
         while tokenizer.advance()? {
