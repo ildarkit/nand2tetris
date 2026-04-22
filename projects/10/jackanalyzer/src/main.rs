@@ -1,98 +1,29 @@
 // src/main.rs
 mod jacktokenizer;
+mod token;
+mod xml_serialize;
 
 use std::env;
 use std::iter::once;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter};
+use std::io::{self, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use either::Either;
 use rayon::prelude::*;
 use anyhow::Result;
-use quick_xml::Writer;
-use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use jacktokenizer::{JackTokenizer, TokenType};
+use crate::jacktokenizer::JackTokenizer;
+use crate::xml_serialize::XmlSerializer;
 
 const MESSAGE: &str = "usage: jackanalyzer <Dir/File.jack>";
 
-enum Token<'a> {
-    Keyword(&'a str),
-    Symbol(&'a str),
-    Identifier(&'a str),
-    IntConst(&'a str),
-    StringConst(&'a str),
-}
-
-impl<'a> Token<'a> {
-    pub fn from_tokenizer<R: BufRead>(t: &'a mut JackTokenizer<R>) -> Option<Self> {
-        match t.token_type() {
-            TokenType::Keyword => Some(Token::Keyword(t.keyword())),
-            TokenType::Symbol => Some(Token::Symbol(t.symbol())),
-            TokenType::Identifier => Some(Token::Identifier(t.identifier())),
-            TokenType::IntConst => Some(Token::IntConst(t.int_val())),
-            TokenType::StringConst => Some(Token::StringConst(t.string_val())),
-            TokenType::EOF => None,
-            TokenType::Invalid(token) => {
-                eprintln!("Неверный токен: {}", token);
-                None
-            }
-        }
-    }
-
-    pub fn write_to<W: std::io::Write>(
-        &self,
-        writer: &mut quick_xml::Writer<W>
-        ) -> Result<()>
-    {
-        let (tag, value_str);
-        match self {
-            Self::Keyword(v) => {
-                tag = "keyword";
-                value_str = v;
-            }
-            Self::Symbol(v) => {
-                tag = "symbol";
-                value_str = v;
-            }
-            Self::Identifier(v) => {
-                tag = "identifier";
-                value_str = v;
-            }
-            Self::IntConst(v) => { 
-                tag = "integerConstant"; 
-                value_str = v; 
-            }
-            Self::StringConst(v) => {
-                tag = "stringConstant";
-                value_str = v;
-            }
-        };
-
-        writer.write_event(Event::Start(BytesStart::new(tag)))?;
-        writer.write_event(Event::Text(BytesText::new(value_str)))?;
-        writer.write_event(Event::End(BytesEnd::new(tag)))?;
-        
-        Ok(())
-    }
-}
-
 fn process_file(input: &PathBuf, output: PathBuf) -> Result<()> {
-    let input_file = File::open(input)?;
-    let reader = BufReader::new(input_file);
-    let output_file = File::create(output)?;
-    let mut writer = Writer::new_with_indent(BufWriter::new(output_file), b' ', 4);
+    let reader = BufReader::new(File::open(input)?);
+    let writer = BufWriter::new(File::create(output)?);
+    
+    let tokenizer = JackTokenizer::new(reader);
+    let mut serializer = XmlSerializer::new(writer);
 
-    writer.write_event(Event::Start(BytesStart::new("tokens")))?;
-    let mut tokenizer = JackTokenizer::new(reader);
-    while tokenizer.advance()? {
-        if let Some(token) = Token::from_tokenizer(&mut tokenizer) {
-            token.write_to(&mut writer)?;
-        } else {
-            break;
-        }
-    }
-    writer.write_event(Event::End(BytesEnd::new("tokens")))?;
-    Ok(())
+    serializer.serialize_all(tokenizer)
 }
 
 fn output_file(path: &Path) -> Result<PathBuf> {
