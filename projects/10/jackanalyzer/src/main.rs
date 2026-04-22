@@ -12,21 +12,27 @@ use either::Either;
 use rayon::prelude::*;
 use anyhow::Result;
 use crate::tokenize::JackTokenizer;
-use crate::serialize::XmlSerializer;
+use crate::serialize::{XmlSerializer, TokenSerializer};
 
 const MESSAGE: &str = "usage: jackanalyzer <Dir/File.jack>";
+const SERIALIZER: &str = "xml";
 
-fn process_file(input: &PathBuf, output: PathBuf) -> Result<()> {
-    let reader = BufReader::new(File::open(input)?);
+fn handle_path(path: &Path) -> anyhow::Result<()> {
+    let output = output_file(path, SERIALIZER)?;
     let writer = BufWriter::new(File::create(output)?);
-    
-    let tokenizer = JackTokenizer::new(reader);
     let mut serializer = XmlSerializer::new(writer);
+    
+    process_file(path, &mut serializer)
+}
+
+fn process_file<S: TokenSerializer>(input: &Path, serializer: &mut S) -> Result<()> { 
+    let reader = BufReader::new(File::open(input)?);
+    let tokenizer = JackTokenizer::new(reader);
 
     serializer.serialize_all(tokenizer)
 }
 
-fn output_file(path: &Path) -> Result<PathBuf> {
+fn output_file(path: &Path, extension: &str) -> Result<PathBuf> {
     Ok(path.parent()
         .map(|parent| {
             path
@@ -34,7 +40,7 @@ fn output_file(path: &Path) -> Result<PathBuf> {
                 .map(|name| {
                     let mut new_name = name.to_os_string();
                     new_name.push("T");
-                    parent.join(Path::new(&new_name).with_extension("xml"))
+                    parent.join(Path::new(&new_name).with_extension(extension))
                 })
         })
         .flatten()
@@ -62,22 +68,15 @@ fn main() -> Result<()> {
         false => Either::Right(once(path_arg))
     };
 
-    let jack_files: Vec<_> = paths
+    let files: Vec<_> = paths
         .filter(|path| path.extension() == Some("jack".as_ref()))
         .collect();
 
-    jack_files
-        .par_iter()
-        .for_each(|path| {
-            match output_file(path) {
-                Ok(output) => {
-                    if let Err(e) = process_file(path, output) {
-                        eprintln!("Ошибка при обработке {:?}: {}", path, e);
-                    }
-                },
-                Err(e) => eprintln!("{}", e),
-            }
-        });
+    files.par_iter().for_each(|path| {
+        if let Err(e) = handle_path(path) {
+            eprintln!("Ошибка при обработке {:?}: {}", path, e);
+        }
+    });
 
     Ok(())
 }
