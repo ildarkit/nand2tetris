@@ -34,12 +34,25 @@ impl <R: BufRead> JackTokenizer<R> {
     }
 
     fn read_line(&mut self) -> Result<bool> {
+        let mut multi_comment = false;
         self.data.clear();
         while self.reader.read_line(&mut self.data)? > 0 {
+            if let Some(_) = self.data.find("/*") {
+                multi_comment = true;
+            }
+            if multi_comment { 
+                if let Some(_) = self.data.find("*/") {
+                    multi_comment = false;
+                }
+                self.data.clear();
+                continue;
+            };
+
             if let Some(i) = self.data.find("//") {
                 self.data.truncate(i);
             }
-            let trimmed = self.data.trim();
+
+            let trimmed = self.data.trim(); 
             if !trimmed.is_empty() {
                 return Ok(true);
             }
