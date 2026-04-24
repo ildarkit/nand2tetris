@@ -2,6 +2,11 @@ use std::io::BufRead;
 use std::ops::Range;
 use anyhow::Result;
 
+const SYMBOLS: &[char] = &[
+    '{', '}', '(', ')', '[', ']', '.', ',', ';', 
+    '+', '-', '*', '/', '&', '|', '<', '>', '=', '~'
+];
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TokenType {
     Keyword,
@@ -66,18 +71,54 @@ impl <R: BufRead> JackTokenizer<R> {
             if !self.read_line()? {
                 return Ok(false);
             }
-            let data_ptr = self.data.as_ptr() as usize;
             self.index = 0;
             self.tokens.clear();
-            let new_tokens = self.data
-                .split_whitespace()
-                .map(|word| {
-                    let start = word.as_ptr() as usize - data_ptr;
-                    start..(start + word.len())
-                });
-            self.tokens.extend(new_tokens);
+            self.get_tokens();
         }
         Ok(true)
+    }
+
+    fn get_tokens(&mut self) {
+        let mut word_start: Option<usize> = None;
+        let mut string_const = false;
+        
+        let mut chars = self.data.char_indices();
+
+        while let Some((idx, ch)) = chars.next() {
+            if string_const {
+                if ch == '"' {
+                    if let Some(start) = word_start.take() {
+                        self.tokens.push(start..idx + 1);
+                    }
+                    string_const = false;
+                }
+                continue;
+            }
+
+            if ch == '"' {
+                if let Some(start) = word_start.take() {
+                    self.tokens.push(start..idx);
+                }
+                word_start = Some(idx);
+                string_const = true;
+                continue;
+            }
+
+            if ch.is_whitespace() || SYMBOLS.contains(&ch) {
+                if let Some(start) = word_start.take() {
+                    self.tokens.push(start..idx);
+                }
+                if SYMBOLS.contains(&ch) {
+                    self.tokens.push(idx..idx + ch.len_utf8());
+                }
+            } else if word_start.is_none() {
+                word_start = Some(idx);
+            }
+        }
+
+        if let Some(start) = word_start {
+            self.tokens.push(start..self.data.len());
+        }
     }
 
     fn next_token(&mut self) -> Option<&str> {
@@ -104,8 +145,7 @@ impl <R: BufRead> JackTokenizer<R> {
                 "this" | "let" | "do" | "if" | "else" | "while" | "return" => {
                 TokenType::Keyword
             },
-            "{" | "}" | "(" | ")" | "[" | "]" | "." | "," | ";" | "+" | "-" | "*" | "/" |
-                "&" | "|" | "<" | ">" | "=" | "~" => {
+            t if t.len() == 1 && SYMBOLS.contains(&t.chars().next().unwrap()) => {
                 TokenType::Symbol
             },
             _ if (token.starts_with('"') && token.ends_with('"')) => {
@@ -145,6 +185,6 @@ impl <R: BufRead> JackTokenizer<R> {
     }
 
     pub fn string_val(&self) -> &str {
-        self.current_token()
+        self.current_token().trim_matches('"')
     }
 }
