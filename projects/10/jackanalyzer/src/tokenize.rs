@@ -81,7 +81,6 @@ impl <R: BufRead> JackTokenizer<R> {
     fn get_tokens(&mut self) {
         let mut word_start: Option<usize> = None;
         let mut string_const = false;
-        
         let mut chars = self.data.char_indices();
 
         while let Some((idx, ch)) = chars.next() {
@@ -158,7 +157,7 @@ impl <R: BufRead> JackTokenizer<R> {
                  && token.chars().all(|c| c.is_alphanumeric() || c == '_') => {
                 TokenType::Identifier
             },
-            token => TokenType::Invalid(token.to_string()),
+            _ => TokenType::Invalid(token.to_string()),
         }
     }
 
@@ -185,6 +184,6 @@ impl <R: BufRead> JackTokenizer<R> {
     }
 
     pub fn string_val(&self) -> &str {
-        self.current_token().trim_matches('"')
+        self.current_token()
     }
 }
