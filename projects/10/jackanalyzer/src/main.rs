@@ -1,7 +1,7 @@
 // src/main.rs
 mod tokenize;
-mod token;
 mod serialize;
+mod compile;
 
 use std::env;
 use std::iter::once;
@@ -12,24 +12,25 @@ use either::Either;
 use rayon::prelude::*;
 use anyhow::Result;
 use crate::tokenize::JackTokenizer;
-use crate::serialize::{XmlSerializer, TokenSerializer};
+use crate::serialize::XmlSerializer;
+use crate::compile::CompilationEngine;
 
 const MESSAGE: &str = "usage: jackanalyzer <Dir/File.jack>";
-const SERIALIZER: &str = "xml";
 
-fn handle_path(path: &Path) -> anyhow::Result<()> {
-    let output = output_file(path, SERIALIZER)?;
-    let writer = BufWriter::new(File::create(output)?);
-    let mut serializer = XmlSerializer::new(writer);
-    
-    process_file(path, &mut serializer)
-}
-
-fn process_file<S: TokenSerializer>(input: &Path, serializer: &mut S) -> Result<()> { 
-    let reader = BufReader::new(File::open(input)?);
-    let tokenizer = JackTokenizer::new(reader);
-
-    serializer.serialize_all(tokenizer)
+fn compile(input: &Path) -> Result<()> {
+    let reader = JackTokenizer::new(
+        BufReader::new(File::open(input)?)
+    );
+    let writer = XmlSerializer::new(
+        BufWriter::new(
+            File::create(
+                output_file(input, "xml")?
+            )?
+        )
+    );
+    let mut compiler = CompilationEngine::new(reader, writer);
+    compiler.compile_class()?;
+    Ok(())
 }
 
 fn output_file(path: &Path, extension: &str) -> Result<PathBuf> {
@@ -60,8 +61,7 @@ fn main() -> Result<()> {
     let paths = match path_arg.is_dir() {
         true => {
             Either::Left(
-                path_arg
-                    .read_dir()?
+                path_arg.read_dir()?
                     .filter_map(|res| res.ok().map(|e| e.path()))
             )
         },
@@ -73,7 +73,7 @@ fn main() -> Result<()> {
         .collect();
 
     files.par_iter().for_each(|path| {
-        if let Err(e) = handle_path(path) {
+        if let Err(e) = compile(path) {
             eprintln!("Ошибка при обработке {:?}: {}", path, e);
         }
     });
