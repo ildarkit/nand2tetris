@@ -116,6 +116,9 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 if value == "}" {
                     self.writer.end_name()?;
                 }
+                if value == "{" && self.section == CodeBlock::SubroutineDec {
+                    self.writer.write_name(CodeBlock::SubroutineBody.as_ref())?;
+                }
                 self.writer.write_node(&name, &value)?;
             }
         }
