@@ -46,6 +46,20 @@ enum CodeBlock {
     Term,
 }
 
+impl CodeBlock {
+    fn is_function_or_statements(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::LetStatement
+                | CodeBlock::IfStatement
+                | CodeBlock::WhileStatement
+                | CodeBlock::DoStatement
+                | CodeBlock::ReturnStatement
+                | CodeBlock::SubroutineDec
+        )
+    }
+}
+
 pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     reader: T,
     writer: S,
@@ -94,17 +108,23 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 if (self.next_section(&value)? && prev_section != self.section) ||
                     self.section == CodeBlock::Class
                 {
+                    if self.section.is_function_or_statements() {
+                        self.writer.end_name()?;
+                    }
                     self.writer.write_name(self.section.as_ref())?;
+                }
+                if value == "}" {
+                    self.writer.end_name()?;
                 }
                 self.writer.write_node(&name, &value)?;
             }
         }
+        self.writer.finish()?;
         Ok(())
     }
 
     pub fn compile_class(&mut self) -> Result<()> {
         self.compile()?;
-        self.writer.finish()?;
         Ok(())
     }
 }
