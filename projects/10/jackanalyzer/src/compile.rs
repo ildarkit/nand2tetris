@@ -119,6 +119,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             if let Some((name, value)) = self.current_token() {
                 let prev_section = self.section.clone();
                 if self.next_section(&value)? && prev_section != self.section {
+                    // close prev tag if function or statements
                     if self.section.is_function() || self.section.is_statements() {
                         self.writer.end_name()?;
                     }
@@ -128,12 +129,14 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         self.writer.write_name(CodeBlock::Statements.as_ref())?;
                     }
                     self.writer.write_name(self.section.as_ref())?;
+                // class
                 } else if self.section == CodeBlock::Class && value == "class" {
                     self.writer.write_name(self.section.as_ref())?;
                 }
                 if value == "}" {
                     self.writer.end_name()?;
                 }
+                // function body
                 if value == "{" && self.section == CodeBlock::SubroutineDec {
                     self.writer.write_name(CodeBlock::SubroutineBody.as_ref())?;
                 }
