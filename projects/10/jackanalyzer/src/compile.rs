@@ -9,26 +9,40 @@ use crate::tokenize::{Tokenizer, TokenType};
 enum CodeBlock {
     #[strum(serialize = "class")]
     Class,
-    #[strum(serialize = "static", serialize = "field")]
+    #[strum(
+        serialize = "classVarDec",
+        serialize = "static",
+        serialize = "field"
+    )]
     ClassVarDec,
-    #[strum(serialize = "constructor", serialize = "function", serialize = "method")]
+    #[strum(
+        serialize = "subroutineDec",
+        serialize = "constructor",
+        serialize = "function",
+        serialize = "method"
+    )]
     SubroutineDec,
+    #[strum(serialize = "parameterList")]
     ParameterList,
+    #[strum(serialize = "subroutineBody")]
     SubroutineBody,
-    #[strum(serialize = "var")]
+    #[strum(serialize = "varDec", serialize = "var")]
     VarDec,
+    #[strum(serialize = "statements")]
     Statements,
-    #[strum(serialize = "let")]
+    #[strum(serialize = "letStatement", serialize = "let")]
     LetStatement,
-    #[strum(serialize = "if")]
+    #[strum(serialize = "ifStatement", serialize = "if")]
     IfStatement,
-    #[strum(serialize = "while")]
+    #[strum(serialize = "whileStatement", serialize = "while")]
     WhileStatement,
-    #[strum(serialize = "do")]
+    #[strum(serialize = "doStatement", serialize = "do")]
     DoStatement,
-    #[strum(serialize = "return")]
+    #[strum(serialize = "returnStatement", serialize = "return")]
     ReturnStatement,
+    #[strum(serialize = "expression")]
     Expression,
+    #[strum(serialize = "term")]
     Term,
 }
 
