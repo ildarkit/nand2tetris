@@ -47,7 +47,21 @@ enum CodeBlock {
 }
 
 impl CodeBlock {
-    fn is_function_or_statements(&self) -> bool {
+    fn is_function(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::SubroutineDec
+        )
+    }
+
+    fn is_var(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::VarDec
+        )
+    }
+
+    fn is_statements(&self) -> bool {
         matches!(
             self,
             CodeBlock::LetStatement
@@ -55,7 +69,6 @@ impl CodeBlock {
                 | CodeBlock::WhileStatement
                 | CodeBlock::DoStatement
                 | CodeBlock::ReturnStatement
-                | CodeBlock::SubroutineDec
         )
     }
 }
@@ -106,8 +119,13 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             if let Some((name, value)) = self.current_token() {
                 let prev_section = self.section.clone();
                 if self.next_section(&value)? && prev_section != self.section {
-                    if self.section.is_function_or_statements() {
+                    if self.section.is_function() || self.section.is_statements() {
                         self.writer.end_name()?;
+                    }
+                    // statements
+                    if self.section.is_statements() && (prev_section.is_function() ||
+                        prev_section.is_var()) {
+                        self.writer.write_name(CodeBlock::Statements.as_ref())?;
                     }
                     self.writer.write_name(self.section.as_ref())?;
                 } else if self.section == CodeBlock::Class && value == "class" {
