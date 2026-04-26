@@ -1,19 +1,31 @@
 use std::io::BufRead;
 use std::ops::Range;
 use anyhow::Result;
+use strum_macros::AsRefStr;
 
 const SYMBOLS: &[char] = &[
     '{', '}', '(', ')', '[', ']', '.', ',', ';', 
     '+', '-', '*', '/', '&', '|', '<', '>', '=', '~'
 ];
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+pub trait Tokenizer {
+    fn advance(&mut self) -> Result<bool>;
+    fn token_type(&mut self) -> TokenType;
+    fn keyword(&self) -> &str;
+    fn symbol(&self) -> &str;
+    fn identifier(&self) -> &str;
+    fn int_val(&self) -> &str;
+    fn string_val(&self) -> &str;
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, AsRefStr)]
+#[strum(serialize_all = "camelCase")]
 pub enum TokenType {
     Keyword,
     Symbol,
     Identifier,
-    IntConst,
-    StringConst,
+    IntegerConstant,
+    StringConstant,
     EOF,
     Invalid(String),
 }
@@ -64,18 +76,6 @@ impl <R: BufRead> JackTokenizer<R> {
             self.data.clear();
         }
         Ok(false)
-    }
-
-    pub fn advance(&mut self) -> Result<bool> {
-        if self.data.is_empty() {
-            if !self.read_line()? {
-                return Ok(false);
-            }
-            self.index = 0;
-            self.tokens.clear();
-            self.get_tokens();
-        }
-        Ok(true)
     }
 
     fn get_tokens(&mut self) {
@@ -133,25 +133,45 @@ impl <R: BufRead> JackTokenizer<R> {
         None
     }
 
-    pub fn token_type(&mut self) -> TokenType {
+    fn current_token(&self) -> &str {
+        let range = self.current.as_ref()
+            .expect("Сначала нужно вызвать метод token_type");
+        &self.data[range.clone()]
+    }
+}
+
+impl<R: BufRead> Tokenizer for JackTokenizer<R> {
+    fn advance(&mut self) -> Result<bool> {
+        if self.data.is_empty() {
+            if !self.read_line()? {
+                return Ok(false);
+            }
+            self.index = 0;
+            self.tokens.clear();
+            self.get_tokens();
+        }
+        Ok(true)
+    }
+
+    fn token_type(&mut self) -> TokenType {
         let Some(token) = self.next_token() else {
             return TokenType::EOF;
         };
 
         match token {
             "class" | "constructor" | "function" | "method" | "field" | "static" |
-                "var" | "int" | "char" | "boolean" | "void" | "true" | "false" | "null" |
-                "this" | "let" | "do" | "if" | "else" | "while" | "return" => {
+            "var" | "int" | "char" | "boolean" | "void" | "true" | "false" | "null" |
+            "this" | "let" | "do" | "if" | "else" | "while" | "return" => {
                 TokenType::Keyword
             },
             t if t.len() == 1 && SYMBOLS.contains(&t.chars().next().unwrap()) => {
                 TokenType::Symbol
             },
-            _ if (token.starts_with('"') && token.ends_with('"')) => {
-                TokenType::StringConst
+            _ if token.starts_with('"') && token.ends_with('"') => {
+                TokenType::StringConstant
             },
             _ if token.parse::<i32>().map_or(false, |n| (0..=32767).contains(&n)) => {
-                TokenType::IntConst
+                TokenType::IntegerConstant
             },
             _ if !token.is_empty() && !token.starts_with(|c: char| c.is_ascii_digit()) 
                  && token.chars().all(|c| c.is_alphanumeric() || c == '_') => {
@@ -161,29 +181,9 @@ impl <R: BufRead> JackTokenizer<R> {
         }
     }
 
-    fn current_token(&self) -> &str {
-        let range = self.current.as_ref()
-            .expect("Сначала нужно вызвать метод token_type");
-        &self.data[range.clone()]
-    }
-
-    pub fn keyword(&self) -> &str {
-        self.current_token()
-    }
-
-    pub fn symbol(&self) -> &str {
-        self.current_token()
-    }
-
-    pub fn identifier(&self) -> &str {
-        self.current_token()
-    }
-
-    pub fn int_val(&self) -> &str {
-        self.current_token()
-    }
-
-    pub fn string_val(&self) -> &str {
-        self.current_token()
-    }
+    fn keyword(&self) -> &str { self.current_token() }
+    fn symbol(&self) -> &str { self.current_token() }
+    fn identifier(&self) -> &str { self.current_token() }
+    fn int_val(&self) -> &str { self.current_token() }
+    fn string_val(&self) -> &str { self.current_token() }
 }
