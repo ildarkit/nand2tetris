@@ -44,9 +44,18 @@ enum CodeBlock {
     Expression,
     #[strum(serialize = "term")]
     Term,
+    #[strum(serialize = "expressionList")]
+    ExpressionList,
 }
 
 impl CodeBlock {
+    fn is_class(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::Class
+        )
+    }
+
     fn is_function(&self) -> bool {
         matches!(
             self,
@@ -54,10 +63,25 @@ impl CodeBlock {
         )
     }
 
-    fn is_var(&self) -> bool {
+    fn is_function_body(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::SubroutineBody
+        )
+    }
+
+    fn is_vars(&self) -> bool {
         matches!(
             self,
             CodeBlock::VarDec
+                | CodeBlock::ClassVarDec,
+        )
+    }
+
+    fn is_class_var(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::ClassVarDec,
         )
     }
 
@@ -71,12 +95,20 @@ impl CodeBlock {
                 | CodeBlock::ReturnStatement
         )
     }
+
+    fn is_if_statement(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::IfStatement
+        )
+    }
 }
 
 pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     reader: T,
     writer: S,
     section: CodeBlock,
+    if_statement: bool,
 }
 
 impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
@@ -85,14 +117,19 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             reader,
             writer,
             section: CodeBlock::Class,
+            if_statement: false,
         }
     }
 
     fn next_section(&mut self, name: &str) -> Result<bool> {
-        Ok(CodeBlock::try_from(name).map(|b| self.section = b).is_ok())
+        Ok(self.get_section(name).map(|b| self.section = b).is_ok())
     }
 
-    fn current_token(&mut self) -> Option<(String, String)> {
+    fn get_section(&mut self, name: &str) -> Result<CodeBlock> {
+        Ok(CodeBlock::try_from(name)?)
+    }
+
+    fn get_token(&mut self) -> Option<(String, String)> {
         let token;
         let token_type = self.reader.token_type();
         match token_type {
@@ -115,40 +152,120 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn compile(&mut self) -> Result<()> {
+        let outter = self.section.clone();
+        let mut statements_block = false;
+        let mut if_statement_closed = false;
+        if outter.is_class() {
+            self.writer.write_name(outter.as_ref())?;
+        }
         while self.reader.advance()? {
-            if let Some((name, value)) = self.current_token() {
-                let prev_section = self.section.clone();
-                if self.next_section(&value)? && prev_section != self.section {
-                    // close prev tag if function or statements
-                    if self.section.is_function() || self.section.is_statements() {
-                        self.writer.end_name()?;
+            if let Some((name, value)) = self.get_token() {
+                if self.next_section(&value)? {
+                    if self.section.is_class() {
+                        self.writer.write_node(&name, &value)?;
                     }
-                    // statements
-                    if self.section.is_statements() && (prev_section.is_function() ||
-                        prev_section.is_var()) {
-                        self.writer.write_name(CodeBlock::Statements.as_ref())?;
+                    // ClassVarDec or VarDec
+                    if self.section.is_vars() {
+                        let var_type = if self.section.is_class_var() {
+                            CodeBlock::ClassVarDec
+                        } else {
+                            CodeBlock::VarDec
+                        };
+                        self.writer.write_name(var_type.as_ref())?;
+                        self.writer.write_node(&name, &value)?;
+                        self.compile()?;
+                        self.writer.end_name(var_type.as_ref())?;
                     }
-                    self.writer.write_name(self.section.as_ref())?;
-                // class
-                } else if self.section == CodeBlock::Class && value == "class" {
-                    self.writer.write_name(self.section.as_ref())?;
+                    // SubroutineDec
+                    if self.section.is_function() {
+                        let function = self.section.clone();
+                        if let Ok(func_type) = self.get_section(&value) &&
+                            func_type.is_function() {
+                            self.writer.write_name(function.as_ref())?;
+                        }
+                        self.writer.write_node(&name, &value)?;
+                    }
+                    // Statements
+                    if self.section.is_statements() {
+                        if if_statement_closed {
+                            self.writer.end_name(CodeBlock::IfStatement.as_ref())?;
+                            if_statement_closed = false;
+                        }
+                        if !statements_block {
+                            self.writer.write_name(CodeBlock::Statements.as_ref())?;
+                            statements_block = true;
+                        }
+                        let statement = self.section.clone();
+                        if let Ok(statement) = self.get_section(&value) &&
+                            statement.is_statements() {
+                            self.writer.write_name(statement.as_ref())?;
+                        }
+                        self.writer.write_node(&name, &value)?;
+                        self.compile()?;
+                        
+                        if !statement.is_if_statement() {
+                            self.writer.end_name(statement.as_ref())?;
+                        } else {
+                            self.if_statement = true;
+                        }
+                    }
+                    if !(outter.is_class() || outter.is_function_body() ||
+                        outter.is_if_statement()) {
+                        self.writer.end_name(outter.as_ref())?;
+                    }
+                } else {
+                    if value == "{" && self.section.is_function() {
+                        self.section = CodeBlock::SubroutineBody;
+                        self.writer.write_name(CodeBlock::SubroutineBody.as_ref())?;
+                        self.writer.write_node(&name, &value)?;
+                        self.compile()?;
+                    } else if value == "{" && !(outter.is_function() || outter.is_class()) {
+                        // else branch -> statements
+                        self.section = CodeBlock::IfStatement;
+                        self.compile()?;
+                    } else if value == ";" || value == "}" {
+                        if value == "}" {
+                            if !if_statement_closed {
+                                self.writer.end_name(CodeBlock::Statements.as_ref())?;
+                            }
+                            if outter.is_function_body() {
+                                self.writer.end_name(CodeBlock::SubroutineBody.as_ref())?;
+                                self.writer.end_name(CodeBlock::SubroutineDec.as_ref())?;
+                            }
+                        }
+                        // exit from function body 
+                        if if_statement_closed {
+                            self.writer.end_name(CodeBlock::SubroutineBody.as_ref())?;
+                            self.writer.end_name(CodeBlock::SubroutineDec.as_ref())?;
+                            self.writer.write_node(&name, &value)?;
+                            return Ok(());
+                        } else {
+                            self.writer.write_node(&name, &value)?;
+                        }
+                        if !outter.is_if_statement() {
+                            return Ok(());
+                        } else {
+                            if_statement_closed = true;
+                        }
+                    } else {
+                        if self.if_statement && value != "else" {
+                            if value != "{" {
+                                self.writer.end_name(CodeBlock::IfStatement.as_ref())?;
+                            }
+                            self.writer.write_node(&name, &value)?;
+                        } else {
+                            self.writer.write_node(&name, &value)?;
+                        }
+                    }
                 }
-                if value == "}" {
-                    self.writer.end_name()?;
-                }
-                // function body
-                if value == "{" && self.section == CodeBlock::SubroutineDec {
-                    self.writer.write_name(CodeBlock::SubroutineBody.as_ref())?;
-                }
-                self.writer.write_node(&name, &value)?;
             }
         }
-        self.writer.finish()?;
         Ok(())
     }
 
     pub fn compile_class(&mut self) -> Result<()> {
         self.compile()?;
+        self.writer.end_name(CodeBlock::Class.as_ref())?;
         Ok(())
     }
 }
