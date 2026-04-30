@@ -214,13 +214,17 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         self.writer.end_name(outter.as_ref())?;
                     }
                 } else {
+                    // function declaration
                     if value == "{" && self.section.is_function() {
                         self.section = CodeBlock::SubroutineBody;
                         self.writer.write_name(CodeBlock::SubroutineBody.as_ref())?;
                         self.writer.write_node(&name, &value)?;
                         self.compile()?;
                     } else if value == "{" && !(outter.is_function() || outter.is_class()) {
-                        // else branch -> statements
+                        // if else branch -> statements
+                        if self.section.is_if_statement() {
+                            self.writer.write_node(&name, &value)?;
+                        }
                         self.section = CodeBlock::IfStatement;
                         self.compile()?;
                     } else if value == ";" || value == "}" {
