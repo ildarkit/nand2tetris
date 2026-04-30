@@ -155,6 +155,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         let outter = self.section.clone();
         let mut statements_block = false;
         let mut if_statement_closed = false;
+        let mut block_closed = false;
         if outter.is_class() {
             self.writer.write_name(outter.as_ref())?;
         }
@@ -178,11 +179,12 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     }
                     // SubroutineDec
                     if self.section.is_function() {
-                        let function = self.section.clone();
-                        if let Ok(func_type) = self.get_section(&value) &&
-                            func_type.is_function() {
-                            self.writer.write_name(function.as_ref())?;
+                        if block_closed {
+                            self.writer.end_name(CodeBlock::SubroutineBody.as_ref())?;
+                            self.writer.end_name(CodeBlock::SubroutineDec.as_ref())?;
+                            block_closed = false;
                         }
+                        self.writer.write_name(self.section.as_ref())?;
                         self.writer.write_node(&name, &value)?;
                     }
                     // Statements
@@ -229,6 +231,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         self.compile()?;
                     } else if value == ";" || value == "}" {
                         if value == "}" {
+                            block_closed = true;
                             if !if_statement_closed {
                                 self.writer.end_name(CodeBlock::Statements.as_ref())?;
                             }
