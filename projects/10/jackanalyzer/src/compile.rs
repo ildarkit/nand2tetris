@@ -102,6 +102,13 @@ impl CodeBlock {
             CodeBlock::IfStatement
         )
     }
+
+    fn is_while(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::WhileStatement
+        )
+    }
 }
 
 pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
@@ -198,10 +205,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                             statements_block = true;
                         }
                         let statement = self.section.clone();
-                        if let Ok(statement) = self.get_section(&value) &&
-                            statement.is_statements() {
-                            self.writer.write_name(statement.as_ref())?;
-                        }
+                        self.writer.write_name(statement.as_ref())?;
                         self.writer.write_node(&name, &value)?;
                         self.compile()?;
                         
@@ -212,7 +216,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         }
                     }
                     if !(outter.is_class() || outter.is_function_body() ||
-                        outter.is_if_statement()) {
+                        outter.is_if_statement() || outter.is_while()) {
                         self.writer.end_name(outter.as_ref())?;
                     }
                 } else {
@@ -223,11 +227,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         self.writer.write_node(&name, &value)?;
                         self.compile()?;
                     } else if value == "{" && !(outter.is_function() || outter.is_class()) {
-                        // if else branch -> statements
-                        if self.section.is_if_statement() {
-                            self.writer.write_node(&name, &value)?;
-                        }
-                        self.section = CodeBlock::IfStatement;
+                        // if/else or while branch -> statements
+                        self.writer.write_node(&name, &value)?;
                         self.compile()?;
                     } else if value == ";" || value == "}" {
                         if value == "}" {
