@@ -116,6 +116,7 @@ pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     writer: S,
     section: CodeBlock,
     if_statement: bool,
+    sibling_closed: bool,
 }
 
 impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
@@ -125,6 +126,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             writer,
             section: CodeBlock::Class,
             if_statement: false,
+            sibling_closed: false,
         }
     }
 
@@ -162,7 +164,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         let outter = self.section.clone();
         let mut statements_block = false;
         let mut if_statement_closed = false;
-        let mut block_closed = false;
+        let mut function_block_closed = false;
         if outter.is_class() {
             self.writer.write_name(outter.as_ref())?;
         }
@@ -186,10 +188,10 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     }
                     // SubroutineDec
                     if self.section.is_function() {
-                        if block_closed {
+                        if function_block_closed {
                             self.writer.end_name(CodeBlock::SubroutineBody.as_ref())?;
                             self.writer.end_name(CodeBlock::SubroutineDec.as_ref())?;
-                            block_closed = false;
+                            function_block_closed = false;
                         }
                         self.writer.write_name(self.section.as_ref())?;
                         self.writer.write_node(&name, &value)?;
@@ -200,8 +202,12 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                             self.writer.end_name(CodeBlock::IfStatement.as_ref())?;
                             if_statement_closed = false;
                         }
-                        if !statements_block {
-                            self.writer.write_name(CodeBlock::Statements.as_ref())?;
+                        // start function statements block
+                        if !statements_block && (outter.is_if_statement() ||
+                            outter.is_function_body() || outter.is_while()) {
+                            if !self.sibling_closed {
+                                self.writer.write_name(CodeBlock::Statements.as_ref())?;
+                            }
                             statements_block = true;
                         }
                         let statement = self.section.clone();
@@ -211,6 +217,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         
                         if !statement.is_if_statement() {
                             self.writer.end_name(statement.as_ref())?;
+                            self.sibling_closed = true;
                         } else {
                             self.if_statement = true;
                         }
@@ -222,17 +229,19 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 } else {
                     // function declaration
                     if value == "{" && self.section.is_function() {
+                        self.sibling_closed = false;
                         self.section = CodeBlock::SubroutineBody;
                         self.writer.write_name(CodeBlock::SubroutineBody.as_ref())?;
                         self.writer.write_node(&name, &value)?;
                         self.compile()?;
                     } else if value == "{" && !(outter.is_function() || outter.is_class()) {
                         // if/else or while branch -> statements
+                        self.sibling_closed = false;
                         self.writer.write_node(&name, &value)?;
                         self.compile()?;
                     } else if value == ";" || value == "}" {
                         if value == "}" {
-                            block_closed = true;
+                            function_block_closed = true;
                             if !if_statement_closed {
                                 self.writer.end_name(CodeBlock::Statements.as_ref())?;
                             }
@@ -249,6 +258,9 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                             return Ok(());
                         } else {
                             self.writer.write_node(&name, &value)?;
+                            if outter.is_while() {
+                                self.writer.end_name(outter.as_ref())?;
+                            }
                         }
                         if !outter.is_if_statement() {
                             return Ok(());
