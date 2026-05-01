@@ -241,15 +241,22 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         self.sibling_closed = false;
                         self.writer.write_node(&name, &value)?;
                         self.compile()?;
+                        return Ok(());
                     } else if value == ";" || value == "}" {
                         if value == "}" {
+                            if outter.is_class() {
+                                self.writer.write_node(&name, &value)?;
+                                return Ok(());
+                            }
                             function_block_closed = true;
                             if !if_statement_closed {
                                 self.writer.end_name(CodeBlock::Statements.as_ref())?;
                             }
                             if outter.is_function_body() {
+                                self.writer.write_node(&name, &value)?;
                                 self.writer.end_name(CodeBlock::SubroutineBody.as_ref())?;
                                 self.writer.end_name(CodeBlock::SubroutineDec.as_ref())?;
+                                return Ok(());
                             }
                         }
                         // exit from function body 
