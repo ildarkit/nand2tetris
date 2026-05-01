@@ -240,6 +240,9 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         // if/else or while branch -> statements
                         self.sibling_closed = false;
                         self.writer.write_node(&name, &value)?;
+                        if !self.section.is_if_statement() {
+                            self.section = outter;
+                        }
                         self.compile()?;
                         return Ok(());
                     } else if value == ";" || value == "}" {
