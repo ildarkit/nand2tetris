@@ -216,7 +216,9 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         self.compile()?;
                         
                         if !statement.is_if_statement() {
-                            self.writer.end_name(statement.as_ref())?;
+                            if !statement.is_while() {
+                                self.writer.end_name(statement.as_ref())?;
+                            }
                             self.sibling_closed = true;
                         } else {
                             self.if_statement = true;
