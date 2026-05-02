@@ -131,33 +131,25 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn next_section(&mut self, name: &str) -> Result<bool> {
-        Ok(self.get_section(name).map(|b| self.section = b).is_ok())
+        Ok(CodeBlock::try_from(name).map(|b| self.section = b).is_ok())
     }
 
-    fn get_section(&mut self, name: &str) -> Result<CodeBlock> {
-        Ok(CodeBlock::try_from(name)?)
-    }
-
-    fn get_token(&mut self) -> Option<(String, String)> {
-        let token;
-        let token_type = self.reader.token_type();
-        match token_type {
-            TokenType::Keyword => token = self.reader.keyword().to_string(),
-            TokenType::Symbol => token = self.reader.symbol().to_string(),
-            TokenType::Identifier => token = self.reader.identifier().to_string(),
-            TokenType::IntegerConstant => token = self.reader.int_val().to_string(),
+    fn get_token(&mut self) -> Option<(TokenType, String)> {
+        let tt = self.reader.token_type();
+        match tt {
+            TokenType::Keyword => Some((tt, self.reader.keyword().to_string())),
+            TokenType::Symbol => Some((tt, self.reader.symbol().to_string())),
+            TokenType::Identifier => Some((tt, self.reader.identifier().to_string())),
+            TokenType::IntegerConstant => Some((tt, self.reader.int_val().to_string())),
             TokenType::StringConstant => {
-                token = self.reader.string_val().trim_matches('"').to_string()
+                Some((tt, self.reader.string_val().trim_matches('"').to_string()))
             }
-            TokenType::EOF => {
-                return None;
-            },
-            TokenType::Invalid(token) => {
-                eprintln!("Неверный токен: {}", token);
-                return None;
+            TokenType::EOF => None,
+            TokenType::Invalid(tok) => {
+                eprintln!("Неверный токен: {}", tok);
+                None
             }
         }
-        Some((token_type.as_ref().to_string(), token))
     }
 
     fn compile(&mut self) -> Result<()> {
@@ -172,7 +164,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             if let Some((name, value)) = self.get_token() {
                 if self.next_section(&value)? {
                     if self.section.is_class() {
-                        self.writer.write_node(&name, &value)?;
+                        self.writer.write_node(&name.as_ref(), &value)?;
                     }
                     // ClassVarDec or VarDec
                     if self.section.is_vars() {
@@ -182,7 +174,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                             CodeBlock::VarDec
                         };
                         self.writer.write_name(var_type.as_ref())?;
-                        self.writer.write_node(&name, &value)?;
+                        self.writer.write_node(&name.as_ref(), &value)?;
                         self.compile()?;
                         self.writer.end_name(var_type.as_ref())?;
                     }
@@ -194,7 +186,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                             function_block_closed = false;
                         }
                         self.writer.write_name(self.section.as_ref())?;
-                        self.writer.write_node(&name, &value)?;
+                        self.writer.write_node(&name.as_ref(), &value)?;
                     }
                     // Statements
                     if self.section.is_statements() {
@@ -212,7 +204,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         }
                         let statement = self.section.clone();
                         self.writer.write_name(statement.as_ref())?;
-                        self.writer.write_node(&name, &value)?;
+                        self.writer.write_node(&name.as_ref(), &value)?;
                         self.compile()?;
                         
                         if !statement.is_if_statement() {
@@ -234,12 +226,12 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         self.sibling_closed = false;
                         self.section = CodeBlock::SubroutineBody;
                         self.writer.write_name(CodeBlock::SubroutineBody.as_ref())?;
-                        self.writer.write_node(&name, &value)?;
+                        self.writer.write_node(&name.as_ref(), &value)?;
                         self.compile()?;
                     } else if value == "{" && !(outter.is_function() || outter.is_class()) {
                         // if/else or while branch -> statements
                         self.sibling_closed = false;
-                        self.writer.write_node(&name, &value)?;
+                        self.writer.write_node(&name.as_ref(), &value)?;
                         if !self.section.is_if_statement() {
                             self.section = outter;
                         }
@@ -248,7 +240,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     } else if value == ";" || value == "}" {
                         if value == "}" {
                             if outter.is_class() {
-                                self.writer.write_node(&name, &value)?;
+                                self.writer.write_node(&name.as_ref(), &value)?;
                                 return Ok(());
                             }
                             function_block_closed = true;
@@ -256,7 +248,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                                 self.writer.end_name(CodeBlock::Statements.as_ref())?;
                             }
                             if outter.is_function_body() {
-                                self.writer.write_node(&name, &value)?;
+                                self.writer.write_node(&name.as_ref(), &value)?;
                                 self.writer.end_name(CodeBlock::SubroutineBody.as_ref())?;
                                 self.writer.end_name(CodeBlock::SubroutineDec.as_ref())?;
                                 return Ok(());
@@ -266,10 +258,10 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         if if_statement_closed {
                             self.writer.end_name(CodeBlock::SubroutineBody.as_ref())?;
                             self.writer.end_name(CodeBlock::SubroutineDec.as_ref())?;
-                            self.writer.write_node(&name, &value)?;
+                            self.writer.write_node(&name.as_ref(), &value)?;
                             return Ok(());
                         } else {
-                            self.writer.write_node(&name, &value)?;
+                            self.writer.write_node(&name.as_ref(), &value)?;
                             if outter.is_while() {
                                 self.writer.end_name(outter.as_ref())?;
                             }
@@ -284,9 +276,9 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                             if value != "{" {
                                 self.writer.end_name(CodeBlock::IfStatement.as_ref())?;
                             }
-                            self.writer.write_node(&name, &value)?;
+                            self.writer.write_node(&name.as_ref(), &value)?;
                         } else {
-                            self.writer.write_node(&name, &value)?;
+                            self.writer.write_node(&name.as_ref(), &value)?;
                         }
                     }
                 }
