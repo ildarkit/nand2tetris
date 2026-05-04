@@ -69,31 +69,16 @@ impl CodeBlock {
         }
     }
 
-    fn is_semicolon_ended(&self) -> bool {
+    fn is_outside_closing(&self) -> bool {
         matches!(
             self,
             CodeBlock::LetStatement |
             CodeBlock::DoStatement |
             CodeBlock::ReturnStatement |
             CodeBlock::ClassVarDec |
-            CodeBlock::VarDec
+            CodeBlock::VarDec |
+            CodeBlock::SubroutineBody
         )
-    }
-
-    fn is_curly_braces_ended(&self) -> bool {
-        matches!(
-            self,
-            CodeBlock::IfStatement |
-            CodeBlock::WhileStatement
-        )
-    }
-
-    fn is_end_block(&self, value: &str) -> bool {
-        match value {
-            ";" => self.is_semicolon_ended(),
-            "}" => self.is_curly_braces_ended(),
-            _ => false,
-        }
     }
 
     fn is_term(&self) -> bool {
@@ -110,7 +95,8 @@ pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     section: CodeBlock,
     token: Option<(TokenType, String)>,
     param_wrapper: Option<CodeBlock>,
-    complete: bool,
+    function_complete: bool,
+    section_updated: bool,
 }
 
 impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
@@ -121,7 +107,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             section: CodeBlock::Class,
             token: None,
             param_wrapper: None,
-            complete: false,
+            function_complete: false,
+            section_updated: false,
         }
     }
 
@@ -185,10 +172,11 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn section_after_params(&mut self) {
+        self.section_updated = true;
         self.section = self.section.next();
     }
 
-    fn compile_block(&mut self, block: &CodeBlock) -> Result<bool> {
+    fn compile_block(&mut self) -> Result<bool> {
         if let Some((name, value)) = self.token.take() {
             self.writer.write_node(&name.as_ref(), &value)?;
         }
@@ -198,25 +186,20 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     self.token = Some((name, value));
                     return Ok(false);
                 } else {
-                    match value {
-                        _ if value == ";" => {
-                            self.writer.write_node(&name.as_ref(), &value)?;
-                            let result = block.is_end_block(&value);
-                            return Ok(result);
+                    match value.as_str() {
+                        ";" => {
+                            self.token = Some((name, value));
+                            return Ok(true);
                         }
-                        _ if value == "(" => {
+                        "(" => {
                             self.params_section();
                             self.writer.write_node(&name.as_ref(), &value)?;
                             return Ok(false);
                         }
-                        _ if value == "{" => {
+                        "{" => {
                             self.writer.write_node(&name.as_ref(), &value)?;
                         }
-                        _ if value == ")" => {
-                            self.token = Some((name, value));
-                            return Ok(true);
-                        }
-                        _ if value == "}" => {
+                        ")" | "}" => {
                             self.token = Some((name, value));
                             return Ok(true);
                         }
@@ -228,111 +211,126 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 }
             }
         }
-        self.complete = true;
         Ok(false)
     }
 
     fn compile(&mut self) -> Result<()> {
-        let code_block = self.section.clone();
-        self.writer.write_name(code_block.as_ref())?;
-
         loop {
-            if self.compile_block(&code_block)? {
-                self.writer.end_name(code_block.as_ref())?;
-                if let Some((name, value)) = self.token.take() {
-                    self.writer.write_node(&name.as_ref(), &value)?;
-                }
+            if !self.section_updated && self.compile_block()? {
                 return Ok(());
             }
-            if self.complete {
+            self.compile_next()?;
+            if self.function_complete {
                 break;
             }
-            self.compile_next()?;
         }
         Ok(())
     }
 
-    pub fn compile_class(&mut self) -> Result<()> {
+    fn ending_code_block(&mut self, block: &CodeBlock) -> Result<()> {
+        if let Some((name, value)) = self.token.take() {
+            if block.is_outside_closing() {
+                self.writer.write_node(&name.as_ref(), &value)?;
+                self.writer.end_name(block.as_ref())?;
+            } else {
+                self.writer.end_name(block.as_ref())?;
+                self.writer.write_node(&name.as_ref(), &value)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn wrap_compiler(&mut self) -> Result<()> {
+        let code_block = self.section.clone();
+        self.section_updated = false;
+        self.writer.write_name(code_block.as_ref())?;
         self.compile()?;
+        self.ending_code_block(&code_block)?;
+        Ok(())
+    }
+
+    pub fn compile_class(&mut self) -> Result<()> {
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_class_var_dec(&mut self) -> Result<()> {
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_subroutine(&mut self) -> Result<()> {
         self.set_params_wrapper();
-        self.compile()?;
+        self.wrap_compiler()?;
+        self.function_complete = false;
         Ok(())
     }
 
     pub fn compile_parameter_list(&mut self) -> Result<()> {
-        self.compile()?;
+        self.wrap_compiler()?;
         self.section_after_params();
-        self.compile()?;
         Ok(())
     }
 
     pub fn compile_subroutine_body(&mut self) -> Result<()> {
-        self.compile()?;
+        self.wrap_compiler()?;
+        self.function_complete = true;
         Ok(())
     }
 
     pub fn compile_var_dec(&mut self) -> Result<()> {
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_statements(&mut self) -> Result<()> {
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_let(&mut self) -> Result<()> {
         self.set_params_wrapper();
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_if(&mut self) -> Result<()> {
         self.set_params_wrapper();
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_while(&mut self) -> Result<()> {
         self.set_params_wrapper();
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_do(&mut self) -> Result<()> {
         self.set_params_wrapper();
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_return(&mut self) -> Result<()> {
         self.set_params_wrapper();
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_expression(&mut self) -> Result<()> {
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_term(&mut self) -> Result<()> {
         self.set_params_wrapper();
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 
     pub fn compile_expression_list(&mut self) -> Result<()> {
-        self.compile()?;
+        self.wrap_compiler()?;
         Ok(())
     }
 }
