@@ -184,6 +184,10 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         }
     }
 
+    fn section_after_params(&mut self) {
+        self.section = self.section.next();
+    }
+
     fn compile_block(&mut self, block: &CodeBlock) -> Result<bool> {
         if let Some((name, value)) = self.token.take() {
             self.writer.write_node(&name.as_ref(), &value)?;
@@ -208,7 +212,11 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         _ if value == "{" => {
                             self.writer.write_node(&name.as_ref(), &value)?;
                         }
-                        _ if value == ")" || value == "}" => {
+                        _ if value == ")" => {
+                            self.token = Some((name, value));
+                            return Ok(true);
+                        }
+                        _ if value == "}" => {
                             self.token = Some((name, value));
                             return Ok(true);
                         }
@@ -261,6 +269,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     pub fn compile_parameter_list(&mut self) -> Result<()> {
+        self.compile()?;
+        self.section_after_params();
         self.compile()?;
         Ok(())
     }
