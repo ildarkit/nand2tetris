@@ -249,6 +249,10 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         Ok(())
     }
 
+    fn toggle_function(&mut self) {
+        self.function_complete = !self.function_complete;
+    }
+
     pub fn compile_class(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         Ok(())
@@ -262,7 +266,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     pub fn compile_subroutine(&mut self) -> Result<()> {
         self.set_params_wrapper();
         self.wrap_compiler()?;
-        self.function_complete = false;
+        self.toggle_function();
         Ok(())
     }
 
@@ -274,7 +278,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
 
     pub fn compile_subroutine_body(&mut self) -> Result<()> {
         self.wrap_compiler()?;
-        self.function_complete = true;
+        self.toggle_function();
         Ok(())
     }
 
