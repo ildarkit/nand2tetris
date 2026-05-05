@@ -217,7 +217,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     fn compile(&mut self) -> Result<()> {
         loop {
             if !self.section_updated && self.compile_block()? {
-                return Ok(());
+                break;
             }
             self.compile_next()?;
             if self.function_complete {
@@ -228,12 +228,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn ending_code_block(&mut self, block: &CodeBlock) -> Result<()> {
-        if let Some((name, value)) = self.token.take() {
-            if block.is_outside_closing() {
+        let token = self.token.take();
+        if block.is_outside_closing() {
+            if let Some((name, value)) = token {
                 self.writer.write_node(&name.as_ref(), &value)?;
-                self.writer.end_name(block.as_ref())?;
-            } else {
-                self.writer.end_name(block.as_ref())?;
+            }
+            self.writer.end_name(block.as_ref())?;
+        } else {
+            self.writer.end_name(block.as_ref())?;
+            if let Some((name, value)) = token {
                 self.writer.write_node(&name.as_ref(), &value)?;
             }
         }
