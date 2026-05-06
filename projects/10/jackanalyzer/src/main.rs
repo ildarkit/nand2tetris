@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use anyhow::Result;
 use crate::tokenize::JackTokenizer;
 use crate::serialize::XmlSerializer;
-use crate::compile::CompilationEngine;
+use crate::compile::{CompilationEngine, Compiler};
 
 const MESSAGE: &str = "usage: jackanalyzer <Dir/File.jack>";
 

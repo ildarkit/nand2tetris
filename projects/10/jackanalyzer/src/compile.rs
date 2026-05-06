@@ -115,6 +115,24 @@ impl CodeBlock {
     }
 }
 
+pub trait Compiler {
+    fn compile_class(&mut self) -> Result<()>;
+    fn compile_class_var_dec(&mut self) -> Result<()>;
+    fn compile_subroutine(&mut self) -> Result<()>;
+    fn compile_parameter_list(&mut self) -> Result<()>;
+    fn compile_subroutine_body(&mut self) -> Result<()>;
+    fn compile_var_dec(&mut self) -> Result<()>;
+    fn compile_statements(&mut self) -> Result<()>;
+    fn compile_let(&mut self) -> Result<()>;
+    fn compile_if(&mut self) -> Result<()>;
+    fn compile_while(&mut self) -> Result<()>;
+    fn compile_do(&mut self) -> Result<()>;
+    fn compile_return(&mut self) -> Result<()>;
+    fn compile_expression(&mut self) -> Result<()>;
+    fn compile_term(&mut self) -> Result<()>;
+    fn compile_expression_list(&mut self) -> Result<()>;
+}
+
 pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     reader: T,
     writer: S,
@@ -319,41 +337,43 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     fn toggle_statements(&mut self) {
         self.statements_tag = !self.statements_tag;
     }
+}
 
-    pub fn compile_class(&mut self) -> Result<()> {
+impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
+    fn compile_class(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_class_var_dec(&mut self) -> Result<()> {
+    fn compile_class_var_dec(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_subroutine(&mut self) -> Result<()> {
+    fn compile_subroutine(&mut self) -> Result<()> {
         self.set_params_wrapper();
         self.wrap_compiler()?;
         self.toggle_function();
         Ok(())
     }
 
-    pub fn compile_parameter_list(&mut self) -> Result<()> {
+    fn compile_parameter_list(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         self.restore_section();
         Ok(())
     }
 
-    pub fn compile_subroutine_body(&mut self) -> Result<()> {
+    fn compile_subroutine_body(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_var_dec(&mut self) -> Result<()> {
+    fn compile_var_dec(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_statements(&mut self) -> Result<()> {
+    fn compile_statements(&mut self) -> Result<()> {
         let code_block = self.section.clone();
         self.toggle_statements();
         self.section_updated = true;
@@ -366,48 +386,48 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         Ok(())
     }
 
-    pub fn compile_let(&mut self) -> Result<()> {
+    fn compile_let(&mut self) -> Result<()> {
         self.set_params_wrapper();
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_if(&mut self) -> Result<()> {
+    fn compile_if(&mut self) -> Result<()> {
         self.set_params_wrapper();
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_while(&mut self) -> Result<()> {
+    fn compile_while(&mut self) -> Result<()> {
         self.set_params_wrapper();
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_do(&mut self) -> Result<()> {
+    fn compile_do(&mut self) -> Result<()> {
         self.set_params_wrapper();
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_return(&mut self) -> Result<()> {
+    fn compile_return(&mut self) -> Result<()> {
         self.set_params_wrapper();
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_expression(&mut self) -> Result<()> {
+    fn compile_expression(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_term(&mut self) -> Result<()> {
+    fn compile_term(&mut self) -> Result<()> {
         self.set_params_wrapper();
         self.wrap_compiler()?;
         Ok(())
     }
 
-    pub fn compile_expression_list(&mut self) -> Result<()> {
+    fn compile_expression_list(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         Ok(())
     }
