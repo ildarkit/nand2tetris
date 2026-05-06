@@ -77,7 +77,19 @@ impl CodeBlock {
             CodeBlock::ReturnStatement |
             CodeBlock::ClassVarDec |
             CodeBlock::VarDec |
-            CodeBlock::SubroutineBody
+            CodeBlock::SubroutineBody |
+            CodeBlock::Class
+        )
+    }
+
+    fn is_statements(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::LetStatement |
+            CodeBlock::DoStatement |
+            CodeBlock::ReturnStatement |
+            CodeBlock::IfStatement |
+            CodeBlock::WhileStatement
         )
     }
 
@@ -85,6 +97,20 @@ impl CodeBlock {
         matches!(
             self,
             CodeBlock::Term
+        )
+    }
+
+    fn is_class(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::Class
+        )
+    }
+
+    fn is_function(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::SubroutineDec
         )
     }
 }
@@ -95,8 +121,11 @@ pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     section: CodeBlock,
     token: Option<(TokenType, String)>,
     param_wrapper: Option<CodeBlock>,
-    function_complete: bool,
+    buf_section: Option<CodeBlock>,
+    function_completed: bool,
     section_updated: bool,
+    statements_tag: bool,
+    nesting_count: u32,
 }
 
 impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
@@ -107,8 +136,11 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             section: CodeBlock::Class,
             token: None,
             param_wrapper: None,
-            function_complete: false,
+            buf_section: None,
+            function_completed: false,
             section_updated: false,
+            statements_tag: false,
+            nesting_count: 0,
         }
     }
 
@@ -167,13 +199,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     fn params_section(&mut self) {
         let wrapper = self.param_wrapper.take();
         if let Some(section) = wrapper {
+            self.buf_section = Some(self.section.clone());
             self.section = section;
         }
     }
 
-    fn section_after_params(&mut self) {
-        self.section_updated = true;
-        self.section = self.section.next();
+    fn restore_section(&mut self) {
+        if let Some(section) = self.buf_section.clone() {
+            self.section = section;
+        }
     }
 
     fn compile_block(&mut self) -> Result<bool> {
@@ -197,9 +231,27 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                             return Ok(false);
                         }
                         "{" => {
-                            self.writer.write_node(&name.as_ref(), &value)?;
+                            self.nesting_count += 1;
+                            if self.section.is_class() {
+                                self.writer.write_node(&name.as_ref(), &value)?;
+                            } else {
+                                self.toggle_statements();
+                                if self.section.is_function() {
+                                    self.section = CodeBlock::SubroutineBody;
+                                }
+                                self.token = Some((name, value));
+                                return Ok(false);
+                            }
                         }
-                        ")" | "}" => {
+                        ")" => {
+                            self.token = Some((name, value));
+                            return Ok(true);
+                        }
+                        "}" => {
+                            self.nesting_count -= 1;
+                            if self.nesting_count == 1 {
+                                self.toggle_function(); // true
+                            }
                             self.token = Some((name, value));
                             return Ok(true);
                         }
@@ -219,12 +271,20 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             if !self.section_updated && self.compile_block()? {
                 break;
             }
+            self.start_statements();
             self.compile_next()?;
-            if self.function_complete {
+            if self.function_completed {
                 break;
             }
         }
         Ok(())
+    }
+
+    fn start_statements(&mut self) {
+        if self.section.is_statements() && self.statements_tag {
+            self.buf_section = Some(self.section.clone());
+            self.section = CodeBlock::Statements;
+        }
     }
 
     fn ending_code_block(&mut self, block: &CodeBlock) -> Result<()> {
@@ -253,7 +313,11 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn toggle_function(&mut self) {
-        self.function_complete = !self.function_complete;
+        self.function_completed = !self.function_completed;
+    }
+
+    fn toggle_statements(&mut self) {
+        self.statements_tag = !self.statements_tag;
     }
 
     pub fn compile_class(&mut self) -> Result<()> {
@@ -275,13 +339,12 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
 
     pub fn compile_parameter_list(&mut self) -> Result<()> {
         self.wrap_compiler()?;
-        self.section_after_params();
+        self.restore_section();
         Ok(())
     }
 
     pub fn compile_subroutine_body(&mut self) -> Result<()> {
         self.wrap_compiler()?;
-        self.toggle_function();
         Ok(())
     }
 
@@ -291,7 +354,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     pub fn compile_statements(&mut self) -> Result<()> {
-        self.wrap_compiler()?;
+        let code_block = self.section.clone();
+        self.toggle_statements();
+        self.section_updated = true;
+        self.writer.write_name(code_block.as_ref())?;
+        if let Some(buf_section) = self.buf_section.take() {
+            self.section = buf_section;
+        }
+        self.compile()?;
+        self.ending_code_block(&code_block)?;
         Ok(())
     }
 
