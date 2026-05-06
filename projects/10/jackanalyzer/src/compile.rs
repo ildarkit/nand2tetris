@@ -250,13 +250,14 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         }
                         "{" => {
                             self.nesting_count += 1;
-                            if self.section.is_class() {
+                            if !self.section.is_function() {
                                 self.writer.write_node(&name.as_ref(), &value)?;
-                            } else {
-                                self.toggle_statements();
-                                if self.section.is_function() {
-                                    self.section = CodeBlock::SubroutineBody;
+                                if !self.section.is_class() {
+                                    self.toggle_statements(); // true
                                 }
+                            } else {
+                                self.toggle_statements(); // true
+                                self.section = CodeBlock::SubroutineBody;
                                 self.token = Some((name, value));
                                 return Ok(false);
                             }
@@ -375,7 +376,7 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
 
     fn compile_statements(&mut self) -> Result<()> {
         let code_block = self.section.clone();
-        self.toggle_statements();
+        self.toggle_statements(); // false
         self.section_updated = true;
         self.writer.write_name(code_block.as_ref())?;
         if let Some(buf_section) = self.buf_section.take() {
