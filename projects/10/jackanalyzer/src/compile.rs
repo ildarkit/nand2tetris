@@ -93,6 +93,13 @@ impl CodeBlock {
         )
     }
 
+    fn is_if_statement(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::IfStatement
+        )
+    }
+
     fn is_term(&self) -> bool {
         matches!(
             self,
@@ -286,11 +293,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn compile(&mut self) -> Result<()> {
+        let code_block = self.section.clone();
+        let mut started = false;
         loop {
             if !self.section_updated && self.compile_block()? {
                 break;
             }
-            self.start_statements();
+            if self.check_closing_if_statement(&code_block, &mut started) {
+                break;
+            }
             self.compile_next()?;
             if self.function_completed {
                 break;
@@ -299,15 +310,36 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         Ok(())
     }
 
-    fn start_statements(&mut self) {
+    fn check_closing_if_statement(
+        &mut self,
+        code_block: &CodeBlock,
+        started: &mut bool) -> bool
+    {
+        if !self.section_updated && self.start_statements() {
+            *started = true;
+        } else if code_block.is_if_statement() && *started {
+            // closing if statement
+            self.section_updated = true;
+            return true;
+        }
+        false
+    }
+
+    fn start_statements(&mut self) -> bool {
         if self.section.is_statements() && self.statements_tag {
             self.buf_section = Some(self.section.clone());
             self.section = CodeBlock::Statements;
+            return true;
         }
+        false
     }
 
     fn ending_code_block(&mut self, block: &CodeBlock) -> Result<()> {
-        let token = self.token.take();
+        let token = if !self.section_updated {
+            self.token.take()
+        } else {
+            None
+        };
         if block.is_outside_closing() {
             if let Some((name, value)) = token {
                 self.writer.write_node(&name.as_ref(), &value)?;
