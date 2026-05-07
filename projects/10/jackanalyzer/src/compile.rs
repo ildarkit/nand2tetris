@@ -1,126 +1,8 @@
 use std::convert::AsRef;
 use anyhow::Result;
-use strum_macros::{EnumString, AsRefStr};
 use crate::serialize::Serializer;
 use crate::tokenize::{Tokenizer, TokenType};
-
-#[derive(AsRefStr, Debug, PartialEq, Eq, EnumString, Clone)]
-#[strum(serialize_all = "camelCase")]
-enum CodeBlock {
-    #[strum(serialize = "class")]
-    Class,
-    #[strum(
-        serialize = "classVarDec",
-        serialize = "static",
-        serialize = "field"
-    )]
-    ClassVarDec,
-    #[strum(
-        serialize = "subroutineDec",
-        serialize = "constructor",
-        serialize = "function",
-        serialize = "method"
-    )]
-    SubroutineDec,
-    #[strum(serialize = "parameterList")]
-    ParameterList,
-    #[strum(serialize = "subroutineBody")]
-    SubroutineBody,
-    #[strum(serialize = "varDec", serialize = "var")]
-    VarDec,
-    #[strum(serialize = "statements")]
-    Statements,
-    #[strum(serialize = "letStatement", serialize = "let")]
-    LetStatement,
-    #[strum(serialize = "ifStatement", serialize = "if")]
-    IfStatement,
-    #[strum(serialize = "whileStatement", serialize = "while")]
-    WhileStatement,
-    #[strum(serialize = "doStatement", serialize = "do")]
-    DoStatement,
-    #[strum(serialize = "returnStatement", serialize = "return")]
-    ReturnStatement,
-    #[strum(serialize = "expression")]
-    Expression,
-    #[strum(serialize = "term")]
-    Term,
-    #[strum(serialize = "expressionList")]
-    ExpressionList,
-}
-
-impl CodeBlock {
-    fn next(&self) -> Self {
-        match self {
-            CodeBlock::Class => CodeBlock::ClassVarDec,
-            CodeBlock::ClassVarDec => CodeBlock::SubroutineDec,
-            CodeBlock::SubroutineDec => CodeBlock::ParameterList,
-            CodeBlock::ParameterList => CodeBlock::SubroutineBody,
-            CodeBlock::SubroutineBody => CodeBlock::VarDec,
-            CodeBlock::VarDec => CodeBlock::Statements,
-            CodeBlock::Statements => CodeBlock::Expression,
-            CodeBlock::Expression => CodeBlock::Term,
-            CodeBlock::LetStatement => CodeBlock::Expression,
-            CodeBlock::IfStatement => CodeBlock::Expression,
-            CodeBlock::WhileStatement => CodeBlock::Expression,
-            CodeBlock::DoStatement => CodeBlock::ExpressionList,
-            CodeBlock::ReturnStatement => CodeBlock::Expression,
-            CodeBlock::ExpressionList => CodeBlock::Expression,
-            CodeBlock::Term => CodeBlock::Expression,
-        }
-    }
-
-    fn is_outside_closing(&self) -> bool {
-        matches!(
-            self,
-            CodeBlock::LetStatement |
-            CodeBlock::DoStatement |
-            CodeBlock::ReturnStatement |
-            CodeBlock::ClassVarDec |
-            CodeBlock::VarDec |
-            CodeBlock::SubroutineBody |
-            CodeBlock::Class
-        )
-    }
-
-    fn is_statements(&self) -> bool {
-        matches!(
-            self,
-            CodeBlock::LetStatement |
-            CodeBlock::DoStatement |
-            CodeBlock::ReturnStatement |
-            CodeBlock::IfStatement |
-            CodeBlock::WhileStatement
-        )
-    }
-
-    fn is_if_statement(&self) -> bool {
-        matches!(
-            self,
-            CodeBlock::IfStatement
-        )
-    }
-
-    fn is_term(&self) -> bool {
-        matches!(
-            self,
-            CodeBlock::Term
-        )
-    }
-
-    fn is_class(&self) -> bool {
-        matches!(
-            self,
-            CodeBlock::Class
-        )
-    }
-
-    fn is_function(&self) -> bool {
-        matches!(
-            self,
-            CodeBlock::SubroutineDec
-        )
-    }
-}
+use crate::grammar::CodeBlock;
 
 pub trait Compiler {
     fn compile_class(&mut self) -> Result<()>;
@@ -257,7 +139,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                         }
                         "{" => {
                             self.nesting_count += 1;
-                            if !self.section.is_function() {
+                            if !self.section.is_subroutine_dec() {
                                 self.writer.write_node(&name.as_ref(), &value)?;
                                 if !self.section.is_class() {
                                     self.toggle_statements(); // true
@@ -326,7 +208,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn start_statements(&mut self) -> bool {
-        if self.section.is_statements() && self.statements_tag {
+        if self.section.is_all_statements() && self.statements_tag {
             self.buf_section = Some(self.section.clone());
             self.section = CodeBlock::Statements;
             return true;

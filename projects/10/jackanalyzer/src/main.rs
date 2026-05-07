@@ -2,6 +2,7 @@
 mod tokenize;
 mod serialize;
 mod compile;
+mod grammar;
 
 use std::env;
 use std::iter::once;
