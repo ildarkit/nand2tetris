@@ -4,6 +4,13 @@ use crate::serialize::Serializer;
 use crate::tokenize::{Tokenizer, TokenType};
 use crate::grammar::CodeBlock;
 
+enum CodeState {
+    OpenBlock,
+    WriteAndOpenBlock,
+    CloseBlock,
+    Step,
+}
+
 pub trait Compiler {
     fn compile_class(&mut self) -> Result<()>;
     fn compile_class_var_dec(&mut self) -> Result<()>;
@@ -49,6 +56,49 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             statements_tag: false,
             nesting_count: 0,
         }
+    }
+
+    fn dispatch_statement(&mut self) -> CodeState {
+        let Some((ref name, ref value)) = self.token else {
+            return CodeState::Step;
+        };
+        match value.as_str() {
+            ";" | ")" => {
+                CodeState::CloseBlock
+            }
+            "(" => {
+                if name.is_identifier() {
+                    self.section = CodeBlock::ExpressionList;
+                } else {
+                    self.start_expression();
+                }
+                CodeState::WriteAndOpenBlock
+            }
+            "{" => {
+                self.nesting_count += 1;
+                if !self.section.is_subroutine_dec() {
+                    if !self.section.is_class() {
+                        self.toggle_statements(); // true
+                    }
+                    CodeState::Step
+                } else {
+                    self.toggle_statements(); // true
+                    self.section = CodeBlock::SubroutineBody;
+                    CodeState::OpenBlock
+                }
+            }
+            "}" => {
+                self.nesting_count -= 1;
+                if self.nesting_count == 1 {
+                    self.toggle_function(); // true
+                }
+                CodeState::CloseBlock
+            }
+            _ => {
+                CodeState::Step
+            }
+        }
+
     }
 
     fn section_from(&mut self, name: &str) -> Result<bool> {
@@ -97,13 +147,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         self.param_wrapper.replace(self.section.next());
     }
 
-    fn identifier_params(&mut self, name: &TokenType) {
-        if self.section.is_term() && *name == TokenType::Identifier {
-            self.param_wrapper.replace(CodeBlock::ExpressionList);
-        }
-    }
-
-    fn params_section(&mut self) {
+    fn start_expression(&mut self) {
         let wrapper = self.param_wrapper.take();
         if let Some(section) = wrapper {
             self.buf_section = Some(self.section.clone());
@@ -123,55 +167,40 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         }
         while self.reader.advance()? {
             if let Some((name, value)) = self.get_token() {
+                let code_state;
+                self.token = Some((name, value.clone()));
                 if value != "class" && self.section_from(&value)? {
-                    self.token = Some((name, value));
                     return Ok(false);
                 } else {
-                    match value.as_str() {
-                        ";" => {
-                            self.token = Some((name, value));
-                            return Ok(true);
-                        }
-                        "(" => {
-                            self.params_section();
-                            self.writer.write_node(&name.as_ref(), &value)?;
-                            return Ok(false);
-                        }
-                        "{" => {
-                            self.nesting_count += 1;
-                            if !self.section.is_subroutine_dec() {
-                                self.writer.write_node(&name.as_ref(), &value)?;
-                                if !self.section.is_class() {
-                                    self.toggle_statements(); // true
-                                }
-                            } else {
-                                self.toggle_statements(); // true
-                                self.section = CodeBlock::SubroutineBody;
-                                self.token = Some((name, value));
-                                return Ok(false);
-                            }
-                        }
-                        ")" => {
-                            self.token = Some((name, value));
-                            return Ok(true);
-                        }
-                        "}" => {
-                            self.nesting_count -= 1;
-                            if self.nesting_count == 1 {
-                                self.toggle_function(); // true
-                            }
-                            self.token = Some((name, value));
-                            return Ok(true);
-                        }
-                        _ => {
-                            self.identifier_params(&name);
-                            self.writer.write_node(&name.as_ref(), &value)?;
-                        }
+                    code_state = self.dispatch_statement();
+                }
+
+                self.write_token(&code_state)?;
+
+                match code_state {
+                    CodeState::WriteAndOpenBlock | CodeState::OpenBlock => {
+                        return Ok(false);
                     }
+                    CodeState::CloseBlock => {
+                        return Ok(true);
+                    }
+                    _ => {}
                 }
             }
         }
         Ok(false)
+    }
+
+    fn write_token(&mut self, code_state: &CodeState) -> Result<()> {
+        match code_state {
+            CodeState::WriteAndOpenBlock | CodeState::Step => {
+                if let Some((name, value)) = self.token.take() {
+                    self.writer.write_node(&name.as_ref(), &value)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
     }
 
     fn compile(&mut self) -> Result<()> {
