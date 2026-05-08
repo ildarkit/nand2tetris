@@ -1,7 +1,7 @@
 use std::io::BufRead;
 use std::ops::Range;
 use anyhow::Result;
-use strum_macros::AsRefStr;
+use strum_macros::{AsRefStr, EnumIs};
 
 const SYMBOLS: &[char] = &[
     '{', '}', '(', ')', '[', ']', '.', ',', ';', 
@@ -18,7 +18,7 @@ pub trait Tokenizer {
     fn string_val(&self) -> &str;
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, AsRefStr)]
+#[derive(Clone, PartialEq, Eq, Debug, AsRefStr, EnumIs)]
 #[strum(serialize_all = "camelCase")]
 pub enum TokenType {
     Keyword,
