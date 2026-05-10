@@ -1,5 +1,18 @@
 use strum_macros::{EnumString, AsRefStr, EnumIs};
 
+#[derive(AsRefStr, Debug, PartialEq, Eq, EnumString, Clone)]
+#[strum(serialize_all = "camelCase")]
+pub enum Term {
+    #[strum(serialize = "identifier")]
+    Identifier,
+    #[strum(serialize = "keyword")]
+    Keyword,
+    #[strum(serialize = "integerConstant")]
+    IntegerConstant,
+    #[strum(serialize = "stringConstant")]
+    StringConstant,
+}
+
 #[derive(AsRefStr, Debug, PartialEq, Eq, EnumIs, EnumString, Clone)]
 #[strum(serialize_all = "camelCase")]
 pub enum CodeBlock {
@@ -86,6 +99,15 @@ impl CodeBlock {
             CodeBlock::ReturnStatement |
             CodeBlock::IfStatement |
             CodeBlock::WhileStatement
+        )
+    }
+
+    pub fn is_all_expressions(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::Expression |
+            CodeBlock::Term |
+            CodeBlock::ExpressionList
         )
     }
 }

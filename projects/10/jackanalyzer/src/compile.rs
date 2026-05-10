@@ -2,7 +2,7 @@ use std::convert::AsRef;
 use anyhow::Result;
 use crate::serialize::Serializer;
 use crate::tokenize::{Tokenizer, TokenType};
-use crate::grammar::CodeBlock;
+use crate::grammar::{Term, CodeBlock};
 
 enum CodeState {
     OpenBlock,
@@ -59,19 +59,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn dispatch_statement(&mut self) -> CodeState {
-        let Some((ref name, ref value)) = self.token else {
+        let Some((_, ref value)) = self.token else {
             return CodeState::Step;
         };
         match value.as_str() {
-            ";" | ")" => {
+            ";" => {
                 CodeState::CloseBlock
             }
-            "(" => {
-                if name.is_identifier() {
-                    self.section = CodeBlock::ExpressionList;
-                } else {
-                    self.start_expression();
-                }
+            "(" | "[" => {
+                self.start_expression();
                 CodeState::WriteAndOpenBlock
             }
             "{" => {
@@ -94,11 +90,50 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 }
                 CodeState::CloseBlock
             }
+            "=" => {
+                self.start_expression();
+                CodeState::WriteAndOpenBlock
+            }
             _ => {
                 CodeState::Step
             }
         }
+    }
 
+    fn dispatch_expression(&mut self, prev_token: Option<(TokenType, String)>) -> CodeState {
+        let Some((ref name, ref value)) = self.token else {
+            return CodeState::Step;
+        };
+        match value.as_str() {
+            ";" | ")" | "]" => {
+                CodeState::CloseBlock
+            }
+            "(" => {
+                if let Some((ref prev_name, _)) = prev_token && prev_name.is_identifier() {
+                    self.section = CodeBlock::ExpressionList;
+                } else {
+                    self.section = self.section.next();
+                }
+                CodeState::WriteAndOpenBlock
+            }
+            "[" => {
+                self.section = self.section.next();
+                CodeState::WriteAndOpenBlock
+            }
+            "." => {
+                CodeState::Step
+            }
+            _ => {
+                if let Some((_, ref prev_value)) = prev_token && prev_value == "." {
+                    CodeState::Step
+                } else if Term::try_from(name.as_ref()).is_ok() {
+                    self.section = self.section.next();
+                    CodeState::OpenBlock
+                } else {
+                    CodeState::Step
+                }
+            }
+        }
     }
 
     fn section_from(&mut self, name: &str) -> Result<bool> {
@@ -162,6 +197,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn compile_block(&mut self) -> Result<bool> {
+        let mut prev_token = None;
         if let Some((name, value)) = self.token.take() {
             self.writer.write_node(&name.as_ref(), &value)?;
         }
@@ -171,10 +207,13 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.token = Some((name, value.clone()));
                 if value != "class" && self.section_from(&value)? {
                     return Ok(false);
+                } else if self.section.is_all_expressions() {
+                    code_state = self.dispatch_expression(prev_token);
                 } else {
                     code_state = self.dispatch_statement();
                 }
 
+                prev_token = self.token.clone();
                 self.write_token(&code_state)?;
 
                 match code_state {
@@ -362,6 +401,7 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
 
     fn compile_expression(&mut self) -> Result<()> {
         self.wrap_compiler()?;
+        self.restore_section();
         Ok(())
     }
 
