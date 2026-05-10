@@ -110,5 +110,13 @@ impl CodeBlock {
             CodeBlock::ExpressionList
         )
     }
+
+    pub fn is_ending_semicolon(&self) -> bool {
+        matches!(
+            self,
+            CodeBlock::LetStatement |
+            CodeBlock::ReturnStatement
+        )
+    }
 }
 
