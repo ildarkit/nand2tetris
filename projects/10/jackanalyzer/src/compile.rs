@@ -31,6 +31,12 @@ impl CodeState {
     }
 }
 
+trait Output {
+    fn put_node<N: AsRef<str>>(&mut self, name: N, value: &str) -> Result<()>;
+    fn put_start_name<N: AsRef<str>>(&mut self, name: N) -> Result<()>;
+    fn put_end_name<N: AsRef<str>>(&mut self, name: N) -> Result<()>;
+}
+
 pub trait Compiler {
     fn compile_class(&mut self) -> Result<()>;
     fn compile_class_var_dec(&mut self) -> Result<()>;
@@ -252,7 +258,7 @@ fn compile_next(&mut self) -> Result<()> {
 
     fn compile_block(&mut self) -> Result<()> {
         if let Some((name, value)) = self.token.take() {
-            self.writer.write_node(&name.as_ref(), &value)?;
+            self.put_node(&name, &value)?;
         }
         while self.reader.advance()? {
             let current_token = self.get_token();
@@ -281,7 +287,7 @@ fn compile_next(&mut self) -> Result<()> {
         match self.code_state {
             CodeState::WriteAndOpenBlock | CodeState::Step => {
                 if let Some((name, value)) = self.token.take() {
-                    self.writer.write_node(&name.as_ref(), &value)?;
+                    self.put_node(&name, &value)?;
                 }
             }
             _ => {}
@@ -362,13 +368,13 @@ fn compile_next(&mut self) -> Result<()> {
         };
         if block.is_outside_closing() {
             if let Some((name, value)) = token {
-                self.writer.write_node(&name.as_ref(), &value)?;
+                self.put_node(&name, &value)?;
             }
-            self.writer.end_name(block.as_ref())?;
+            self.put_end_name(block)?;
         } else {
-            self.writer.end_name(block.as_ref())?;
+            self.put_end_name(block)?;
             if let Some((name, value)) = token {
-                self.writer.write_node(&name.as_ref(), &value)?;
+                self.put_node(&name, &value)?;
             }
         }
         Ok(())
@@ -377,7 +383,7 @@ fn compile_next(&mut self) -> Result<()> {
     fn wrap_compiler(&mut self) -> Result<()> {
         let code_block = self.section.clone();
         self.section_updated = false;
-        self.writer.write_name(code_block.as_ref())?;
+        self.put_start_name(&code_block)?;
         self.compile()?;
         self.ending_code_block(&code_block)?;
         Ok(())
@@ -430,7 +436,7 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
         let code_block = self.section.clone();
         self.toggle_statements(); // false
         self.section_updated = true;
-        self.writer.write_name(code_block.as_ref())?;
+        self.put_start_name(&code_block)?;
         if let Some(buf_section) = self.buf_section.take() {
             self.section = buf_section;
         }
@@ -474,7 +480,7 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
     fn compile_expression(&mut self) -> Result<()> {
         let code_block = self.section.clone();
         self.section_updated = false;
-        self.writer.write_name(code_block.as_ref())?;
+        self.put_start_name(&code_block)?;
         if self.code_state == CodeState::OpenInnerBlock {
             self.section = self.section.next();
             self.section_updated = true;
@@ -494,6 +500,24 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
     fn compile_expression_list(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         self.restore_section();
+        Ok(())
+    }
+}
+
+
+impl<T: Tokenizer, S: Serializer> Output for CompilationEngine<T, S> {
+    fn put_node<N: AsRef<str>>(&mut self, name: N, value: &str) -> Result<()> {
+        self.writer.write_node(name.as_ref(), value)?;
+        Ok(())
+    }
+
+    fn put_start_name<N: AsRef<str>>(&mut self, name: N) -> Result<()> {
+        self.writer.write_name(name.as_ref())?;
+        Ok(())
+    }
+
+    fn put_end_name<N: AsRef<str>>(&mut self, name: N) -> Result<()> {
+        self.writer.end_name(name.as_ref())?;
         Ok(())
     }
 }
