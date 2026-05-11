@@ -1,5 +1,21 @@
 use strum_macros::{EnumString, AsRefStr, EnumIs};
 
+#[derive(EnumString)]
+pub enum Operation {
+    #[strum(
+        serialize = "+",
+        serialize = "-",
+        serialize = "*",
+        serialize = "/",
+        serialize = "&",
+        serialize = "|",
+        serialize = "<",
+        serialize = ">",
+        serialize = "=",
+        serialize = "~")]
+    Op,
+}
+
 #[derive(AsRefStr, Debug, PartialEq, Eq, EnumString, Clone)]
 #[strum(serialize_all = "camelCase")]
 pub enum Term {
