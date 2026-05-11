@@ -79,12 +79,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         }
     }
 
-    fn dispatch_statement(&mut self) {
-        let Some((_, ref value)) = self.token else {
+    fn dispatch_statement(&mut self, token: Option<(TokenType, String)>) {
+        let Some((_, ref value)) = token else {
             self.code_state = CodeState::Step;
             return;
         };
         match value.as_str() {
+            _ if value != "class" && self.section_from(&value) => {
+                self.code_state = CodeState::OpenBlock;
+            }
             ")" => {
                 self.code_state = CodeState::CloseBlock;
             }
@@ -166,8 +169,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         }
     }
 
-    fn section_from(&mut self, name: &str) -> Result<bool> {
-        Ok(CodeBlock::try_from(name).map(|b| self.section = b).is_ok())
+    fn section_from(&mut self, name: &str) -> bool {
+        CodeBlock::try_from(name).map(|b| self.section = b).is_ok()
     }
 
     fn get_token(&mut self) -> Option<(TokenType, String)> {
@@ -230,21 +233,19 @@ fn compile_next(&mut self) -> Result<CodeBlock> {
     }
 
     fn compile_block(&mut self) -> Result<()> {
-        let mut prev_token = None;
+        let mut prev_token: Option<(TokenType, String)> = None;
         if let Some((name, value)) = self.token.take() {
             self.writer.write_node(&name.as_ref(), &value)?;
         }
         while self.reader.advance()? {
-            if let Some((name, value)) = self.get_token() {
-                self.token = Some((name, value.clone()));
+            let current_token = self.get_token();
+            if current_token.is_some() {
+                self.token = current_token.clone();
 
-                if value != "class" && self.section_from(&value)? {
-                    self.code_state = CodeState::OpenBlock;
-                    break;
-                } else if self.section.is_all_expressions() {
+                if self.section.is_all_expressions() {
                     self.dispatch_expression(prev_token);
                 } else {
-                    self.dispatch_statement();
+                    self.dispatch_statement(current_token);
                 }
 
                 prev_token = self.token.clone();
