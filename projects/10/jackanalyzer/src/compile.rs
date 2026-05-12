@@ -218,25 +218,25 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         }
     }
 
-fn compile_next(&mut self) -> Result<()> {
-    match self.section {
-        CodeBlock::Class => unreachable!(),
-        CodeBlock::ClassVarDec => self.compile_class_var_dec(),
-        CodeBlock::SubroutineDec => self.compile_subroutine(),
-        CodeBlock::ParameterList => self.compile_parameter_list(),
-        CodeBlock::SubroutineBody => self.compile_subroutine_body(),
-        CodeBlock::VarDec => self.compile_var_dec(),
-        CodeBlock::Statements => self.compile_statements(),
-        CodeBlock::Expression => self.compile_expression(),
-        CodeBlock::Term => self.compile_term(),
-        CodeBlock::ExpressionList => self.compile_expression_list(),
-        CodeBlock::LetStatement => self.compile_let(),
-        CodeBlock::IfStatement => self.compile_if(),
-        CodeBlock::WhileStatement => self.compile_while(),
-        CodeBlock::DoStatement => self.compile_do(),
-        CodeBlock::ReturnStatement => self.compile_return(),
+    fn compile_next(&mut self) -> Result<()> {
+        match self.section {
+            CodeBlock::Class => unreachable!(),
+            CodeBlock::ClassVarDec => self.compile_class_var_dec(),
+            CodeBlock::SubroutineDec => self.compile_subroutine(),
+            CodeBlock::ParameterList => self.compile_parameter_list(),
+            CodeBlock::SubroutineBody => self.compile_subroutine_body(),
+            CodeBlock::VarDec => self.compile_var_dec(),
+            CodeBlock::Statements => self.compile_statements(),
+            CodeBlock::Expression => self.compile_expression(),
+            CodeBlock::Term => self.compile_term(),
+            CodeBlock::ExpressionList => self.compile_expression_list(),
+            CodeBlock::LetStatement => self.compile_let(),
+            CodeBlock::IfStatement => self.compile_if(),
+            CodeBlock::WhileStatement => self.compile_while(),
+            CodeBlock::DoStatement => self.compile_do(),
+            CodeBlock::ReturnStatement => self.compile_return(),
+        }
     }
-}
 
     fn set_params_wrapper(&mut self) {
         self.param_wrapper.replace(self.section.next());
@@ -318,13 +318,9 @@ fn compile_next(&mut self) -> Result<()> {
     }
 
     fn is_closing_block(&self, section: &CodeBlock) -> bool {
-        if section.is_term() {
-            if self.code_state.is_closing_wrapper() {
+        if let Some((_, ref value)) = self.token &&
+            (value == ")" || value == "]") && section.is_term() {
                 return true;
-            }
-            if let Some((_, ref value)) = self.token && value == ")" {
-                return true;
-            }
         }
         if (section.is_ending_semicolon() || section.is_all_expressions()) &&
             self.code_state.is_closing_wrapper() {
