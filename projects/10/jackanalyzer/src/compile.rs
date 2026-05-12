@@ -61,6 +61,7 @@ pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     section: CodeBlock,
     token: Option<(TokenType, String)>,
     prev_token: Option<(TokenType, String)>,
+    closing_token: Option<(TokenType, String)>,
     param_wrapper: Option<CodeBlock>,
     buf_section: Option<CodeBlock>,
     function_completed: bool,
@@ -78,6 +79,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             section: CodeBlock::Class,
             token: None,
             prev_token: None,
+            closing_token: None,
             param_wrapper: None,
             buf_section: None,
             function_completed: false,
@@ -146,8 +148,11 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             ";" => {
                 self.code_state = CodeState::CloseWrapperBlock;
             }
-            ")" | "]" => {
+            "," => {
                 self.code_state = CodeState::CloseBlock;
+            }
+            ")" | "]" => {
+                self.code_state = CodeState::CloseWrapperBlock;
             }
             "(" => {
                 if let Some((ref prev_name, _)) = prev_token &&
@@ -194,6 +199,27 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 }
             }
         }
+    }
+
+    fn dispatch_expression_list(&mut self) -> Result<()> {
+        let Some((ref name, ref value)) = self.token else {
+            self.code_state = CodeState::Step;
+            return Ok(());
+        };
+        match value.as_str() {
+            _ if Term::try_from(name.as_ref()).is_ok() => {
+                self.start_expression();
+                self.code_state = CodeState::OpenInnerBlock; 
+            }
+            ";" | ")" => {
+                self.code_state = CodeState::CloseWrapperBlock;
+            }
+            _ => {
+                self.writer.write_node("vval", value)?;
+                self.code_state = CodeState::Step;
+            }
+        }
+        Ok(())
     }
 
     fn section_from(&mut self, name: &str) -> bool {
@@ -265,9 +291,17 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             if current_token.is_some() {
                 self.token = current_token.clone();
 
-                if self.section.is_all_expressions() {
+                if self.section.is_expression_list() {
+                    self.dispatch_expression_list()?;
+                    if self.code_state == CodeState::CloseWrapperBlock {
+                        self.closing_token = self.token.take();
+                    }
+                } else if self.section.is_all_expressions() {
                     let prev_token = self.prev_token.take();
                     self.dispatch_expression(prev_token);
+                    if self.code_state == CodeState::CloseWrapperBlock {
+                        self.closing_token = self.token.take();
+                    }
                 } else {
                     self.dispatch_statement(current_token);
                 }
@@ -308,21 +342,25 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             if self.check_closing_if_statement(&code_block, &mut started) {
                 break;
             }
-            let section = self.section.clone();
             self.compile_next()?;
-            if self.is_closing_block(&section) {
+            self.section = code_block.clone();
+            if self.is_closing_block() {
                 break;
             }
         }
         Ok(())
     }
 
-    fn is_closing_block(&self, section: &CodeBlock) -> bool {
+    fn is_closing_block(&mut self) -> bool {
+        if self.section.is_expression_list() && self.closing_token.is_some() {
+            self.code_state = CodeState::Step;
+            return true;
+        }
         if let Some((_, ref value)) = self.token &&
-            (value == ")" || value == "]") && section.is_term() {
+            (value == ")" || value == "]" || value == ",") && self.section.is_term() {
                 return true;
         }
-        if (section.is_ending_semicolon() || section.is_all_expressions()) &&
+        if (self.section.is_ending_semicolon() || self.section.is_all_expressions()) &&
             self.code_state.is_closing_wrapper() {
                 return true;
         }
@@ -356,6 +394,14 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         false
     }
 
+    fn ending_expression_block(&mut self, block: &CodeBlock) -> Result<()> {
+        if let Some(ref wrapper) = self.buf_section && !wrapper.is_expression_list() {
+            self.token = self.closing_token.take();
+        }
+        self.ending_code_block(block)?;
+        Ok(())
+    }
+
     fn ending_code_block(&mut self, block: &CodeBlock) -> Result<()> {
         let token = if !(self.section_updated || block.is_term()) {
             self.token.take()
@@ -381,6 +427,10 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         self.section_updated = false;
         self.put_start_name(&code_block)?;
         self.compile()?;
+        if code_block.is_ending_semicolon() ||
+            code_block.is_expression_list() {
+            self.token = self.closing_token.take();
+        }
         self.ending_code_block(&code_block)?;
         Ok(())
     }
@@ -475,6 +525,7 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
 
     fn compile_expression(&mut self) -> Result<()> {
         let code_block = self.section.clone();
+        let wrapper_block = self.buf_section.clone();
         self.section_updated = false;
         self.put_start_name(&code_block)?;
         if self.code_state == CodeState::OpenInnerBlock {
@@ -482,7 +533,8 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
             self.section_updated = true;
         }
         self.compile()?;
-        self.ending_code_block(&code_block)?;
+        self.ending_expression_block(&code_block)?;
+        self.buf_section = wrapper_block;
         self.restore_section();
         Ok(())
     }
@@ -494,8 +546,8 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
     }
 
     fn compile_expression_list(&mut self) -> Result<()> {
+        self.set_params_wrapper();
         self.wrap_compiler()?;
-        self.restore_section();
         Ok(())
     }
 }
