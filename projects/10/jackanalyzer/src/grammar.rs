@@ -131,7 +131,8 @@ impl CodeBlock {
         matches!(
             self,
             CodeBlock::LetStatement |
-            CodeBlock::ReturnStatement
+            CodeBlock::ReturnStatement |
+            CodeBlock::DoStatement
         )
     }
 }
