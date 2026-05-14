@@ -184,8 +184,11 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     prev_name.is_symbol() {
                         self.section = self.section.next();
                         self.code_state = CodeState::OpenInnerBlock;
-                } else {
+                } else if let Some((ref prev_name, _)) = prev_token &&
+                    Term::try_from(prev_name.as_ref()).is_ok() {
                     self.code_state = CodeState::CloseBlock;
+                } else {
+                    self.code_state = CodeState::Step;
                 }
             }
             _ if Term::try_from(name.as_ref()).is_ok() => {
