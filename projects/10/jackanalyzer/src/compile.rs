@@ -162,10 +162,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     prev_name.is_identifier() {
                     self.section = CodeBlock::ExpressionList;
                     self.code_state = CodeState::WriteAndOpenBlock;
-                } else {
-                    self.section = CodeBlock::Term;
-                    self.code_state = CodeState::OpenBlock;
+                    return;
                 }
+                if self.section.is_term() {
+                    self.section = self.section.next();
+                    self.code_state = CodeState::OpenInnerBlock;
+                    return;
+                }
+                self.section = CodeBlock::Term;
+                self.code_state = CodeState::OpenBlock;
             }
             "[" => {
                 self.section = self.section.next();
