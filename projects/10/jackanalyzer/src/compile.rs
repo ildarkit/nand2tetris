@@ -99,7 +99,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             ")" | ";" => {
                 self.code_state = CodeState::CloseBlock;
             }
-            "(" | "[" => {
+            "(" | "[" | "=" => {
                 self.start_expression();
                 self.code_state = CodeState::WriteAndOpenBlock;
             }
@@ -122,10 +122,6 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     self.toggle_function(); // true
                 }
                 self.code_state = CodeState::CloseBlock;
-            }
-            "=" => {
-                self.start_expression();
-                self.code_state = CodeState::WriteAndOpenBlock;
             }
             _ => {
                 if Term::try_from(name.as_ref()).is_ok() &&
@@ -184,6 +180,10 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 if let Some((_, ref prev_value)) = prev_token &&
                     *prev_value == "." {
                     self.code_state = CodeState::Step;
+                } else if let Some((_, ref prev_value)) = prev_token &&
+                    *prev_value == "(" {
+                        self.section = self.section.next();
+                        self.code_state = CodeState::OpenInnerBlock;
                 } else {
                     self.section = CodeBlock::Term;
                     self.code_state = CodeState::OpenBlock;
