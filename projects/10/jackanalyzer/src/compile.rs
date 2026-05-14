@@ -376,9 +376,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             self.code_state.is_close_statement()) {
             return true;
         }
-        if self.section.is_term() && (self.code_state.is_close_wrapper_block() ||
-            self.code_state.is_close_statement()) {
-            return true;
+        if self.section.is_term() {
+            if self.code_state.is_close_wrapper_block() {
+                if prev_section.is_expression() {
+                    self.code_state = CodeState::Step;
+                } 
+                return true;
+            } else if self.code_state.is_close_statement() {
+                return true;
+            }
         }
         if self.section.is_ending_semicolon() && self.code_state.is_close_statement() {
             self.code_state = CodeState::Step;
