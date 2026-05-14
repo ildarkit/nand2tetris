@@ -96,7 +96,14 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             _ if value != "class" && self.section_from(&value) => {
                 self.code_state = CodeState::OpenBlock;
             }
-            ")" | ";" => {
+            ";" => {
+                self.code_state = CodeState::CloseBlock;
+            }
+            ")" => {
+                if self.section.is_while_statement() {
+                    self.code_state = CodeState::Step;
+                    return;
+                }
                 self.code_state = CodeState::CloseBlock;
             }
             "(" | "[" | "=" => {
