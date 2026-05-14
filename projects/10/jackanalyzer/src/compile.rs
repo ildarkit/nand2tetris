@@ -88,7 +88,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn dispatch_statement(&mut self, token: Option<(TokenType, String)>) {
-        let Some((_, ref value)) = token else {
+        let Some((ref name, ref value)) = token else {
             self.code_state = CodeState::Step;
             return;
         };
@@ -128,6 +128,12 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.code_state = CodeState::WriteAndOpenBlock;
             }
             _ => {
+                if Term::try_from(name.as_ref()).is_ok() &&
+                    self.section.is_return_statement() {
+                    self.start_expression();
+                    self.code_state = CodeState::OpenInnerBlock;
+                    return;
+                }
                 self.code_state = CodeState::Step;
             }
         }
