@@ -65,7 +65,7 @@ pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     code_state: CodeState,
     section_updated: bool,
     statements_tag: bool,
-    nesting_count: u32,
+    statement_block_count: u32,
 }
 
 impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
@@ -83,7 +83,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             code_state: CodeState::Step,
             section_updated: false,
             statements_tag: false,
-            nesting_count: 0,
+            statement_block_count: 0,
         }
     }
 
@@ -111,7 +111,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.code_state = CodeState::WriteAndOpenBlock;
             }
             "{" => {
-                self.nesting_count += 1;
+                self.statement_block_count += 1;
                 if !self.section.is_subroutine_dec() {
                     if !self.section.is_class() {
                         self.toggle_statements(); // true
@@ -124,8 +124,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 }
             }
             "}" => {
-                self.nesting_count -= 1;
-                if self.nesting_count == 1 {
+                self.statement_block_count -= 1;
+                if self.statement_block_count == 1 {
                     self.toggle_function(); // true
                 }
                 self.code_state = CodeState::CloseBlock;
