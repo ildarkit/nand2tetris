@@ -214,24 +214,43 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 }
             }
         }
+        Ok(())
     }
 
-    fn dispatch_expression_list(&mut self) -> Result<()> {
+    fn dispatch_expression_list(&mut self, prev_token: Option<(TokenType, String)>) {
         let Some((ref name, ref value)) = self.token else {
             self.code_state = CodeState::Step;
-            return Ok(());
+            return;
         };
         match value.as_str() {
             _ if Term::try_from(name.as_ref()).is_ok() => {
-                self.start_expression();
+                self.buf_section = Some(self.section.clone());
+                self.section = CodeBlock::Expression;
                 self.code_state = CodeState::OpenInnerBlock; 
             }
             ")" => {
                 self.code_state = CodeState::CloseWrapperBlock;
             }
+            "(" => {
+                self.buf_section = Some(self.section.clone());
+                self.section = CodeBlock::Expression;
+                self.code_state = CodeState::OpenInnerBlock;
+            }
+            _ if Operation::try_from(value.as_str()).is_ok() => {
+                if let Some((ref prev_name, _)) = prev_token &&
+                    prev_name.is_symbol() {
+                        self.buf_section = Some(self.section.clone());
+                        self.section = self.section.next();
+                        self.code_state = CodeState::OpenInnerBlock;
+                } else if let Some((ref prev_name, _)) = prev_token &&
+                    Term::try_from(prev_name.as_ref()).is_ok() {
+                    self.code_state = CodeState::CloseBlock;
+                } else {
+                    self.code_state = CodeState::Step;
+                }
+            }
             _ => {}
         }
-        Ok(())
     }
 
     fn section_from(&mut self, name: &str) -> bool {
@@ -304,7 +323,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.token = current_token.clone();
 
                 if self.section.is_expression_list() {
-                    self.dispatch_expression_list()?;
+                    let prev_token = self.prev_token.take();
+                    self.dispatch_expression_list(prev_token);
                     if self.code_state.is_close_wrapper_block() {
                         self.closing_token = self.token.take();
                     }
@@ -375,8 +395,9 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         if let Some((_, ref value)) = self.token && value == "," && prev_section.is_term() {
             return true;
         }
-        if self.section.is_expression() && (self.code_state.is_close_wrapper_block() ||
-            self.code_state.is_close_statement()) {
+        if self.section.is_expression() && 
+            (self.code_state.is_close_wrapper_block() ||
+            self.code_state.is_close_statement() {
             return true;
         }
         if self.section.is_term() {
@@ -429,7 +450,9 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
 
     fn ending_expression_block(&mut self, block: &CodeBlock) -> Result<()> {
         if let Some(ref wrapper) = self.buf_section && !wrapper.is_expression_list() {
-            self.token = self.closing_token.take();
+            if self.closing_token.is_some() {
+                self.token = self.closing_token.take();
+            }
         } else if self.code_state.is_close_statement() {
             self.token = self.closing_token.take();
         }
