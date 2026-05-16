@@ -15,6 +15,7 @@ enum CodeState {
     Step,
     CloseWrapperBlock,
     CloseStatement,
+    CloseExpression,
 }
 
 impl CodeState {
@@ -23,7 +24,17 @@ impl CodeState {
             self,
             CodeState::CloseBlock |
             CodeState::CloseWrapperBlock |
-            CodeState::CloseStatement
+            CodeState::CloseStatement |
+            CodeState::CloseExpression
+        )
+    }
+
+    fn is_closing_upper(&self) -> bool {
+        matches!(
+            self,
+            CodeState::CloseWrapperBlock |
+            CodeState::CloseStatement |
+            CodeState::CloseExpression
         )
     }
 }
@@ -66,6 +77,7 @@ pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     section_updated: bool,
     statements_tag: bool,
     statement_block_count: u32,
+    expression_bracket_count: u32,
 }
 
 impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
@@ -84,7 +96,16 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             section_updated: false,
             statements_tag: false,
             statement_block_count: 0,
+            expression_bracket_count: 0,
         }
+    }
+
+    fn inc_bracket_count(&mut self) {
+        self.expression_bracket_count += 1;
+    }
+
+    fn dec_bracket_count(&mut self) {
+        self.expression_bracket_count -= 1;
     }
 
     fn dispatch_statement(&mut self, token: Option<(TokenType, String)>) {
@@ -100,13 +121,19 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.code_state = CodeState::CloseBlock;
             }
             ")" => {
+                self.dec_bracket_count();
                 if self.section.is_while_statement() {
                     self.code_state = CodeState::Step;
                     return;
                 }
                 self.code_state = CodeState::CloseBlock;
             }
-            "(" | "[" | "=" => {
+            "(" | "[" => {
+                self.inc_bracket_count();
+                self.start_expression();
+                self.code_state = CodeState::WriteAndOpenBlock;
+            }
+            "=" => {
                 self.start_expression();
                 self.code_state = CodeState::WriteAndOpenBlock;
             }
@@ -155,9 +182,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.code_state = CodeState::CloseBlock;
             }
             ")" | "]" => {
-                self.code_state = CodeState::CloseWrapperBlock;
+                self.dec_bracket_count();
+                if self.expression_bracket_count > 0 {
+                    self.code_state = CodeState::CloseExpression;
+                } else {
+                    self.code_state = CodeState::CloseWrapperBlock;
+                }
             }
             "(" => {
+                self.inc_bracket_count();
                 if let Some((ref prev_name, _)) = prev_token &&
                     prev_name.is_identifier() {
                     self.section = CodeBlock::ExpressionList;
@@ -173,6 +206,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.code_state = CodeState::OpenBlock;
             }
             "[" => {
+                self.inc_bracket_count();
                 self.section = self.section.next();
                 self.code_state = CodeState::WriteAndOpenBlock;
             }
@@ -214,7 +248,6 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 }
             }
         }
-        Ok(())
     }
 
     fn dispatch_expression_list(&mut self, prev_token: Option<(TokenType, String)>) {
@@ -229,9 +262,11 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.code_state = CodeState::OpenInnerBlock; 
             }
             ")" => {
+                self.dec_bracket_count();
                 self.code_state = CodeState::CloseWrapperBlock;
             }
             "(" => {
+                self.inc_bracket_count();
                 self.buf_section = Some(self.section.clone());
                 self.section = CodeBlock::Expression;
                 self.code_state = CodeState::OpenInnerBlock;
@@ -331,8 +366,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 } else if self.section.is_all_expressions() {
                     let prev_token = self.prev_token.take();
                     self.dispatch_expression(prev_token);
-                    if self.code_state.is_close_wrapper_block() ||
-                        self.code_state.is_close_statement() {
+                    if self.code_state.is_closing_upper() {
                         self.closing_token = self.token.take();
                     }
                 } else {
@@ -380,14 +414,14 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             if !self.section_updated {
                 self.section = code_block.clone();
             }
-            if self.is_closing_block(&prev_section) {
+            if self.closing_block(&prev_section) {
                 break;
             }
         }
         Ok(())
     }
 
-    fn is_closing_block(&mut self, prev_section: &CodeBlock) -> bool {
+    fn closing_block(&mut self, prev_section: &CodeBlock) -> bool {
         if self.section.is_expression_list() && self.closing_token.is_some() {
             self.code_state = CodeState::Step;
             return true;
@@ -395,18 +429,14 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         if let Some((_, ref value)) = self.token && value == "," && prev_section.is_term() {
             return true;
         }
-        if self.section.is_expression() && 
-            (self.code_state.is_close_wrapper_block() ||
-            self.code_state.is_close_statement() {
+        if self.section.is_expression() && self.code_state.is_closing_upper() {
             return true;
         }
         if self.section.is_term() {
-            if self.code_state.is_close_wrapper_block() {
+            if self.code_state.is_closing_upper() {
                 if prev_section.is_expression() {
                     self.code_state = CodeState::Step;
-                } 
-                return true;
-            } else if self.code_state.is_close_statement() {
+                }
                 return true;
             }
         }
@@ -449,11 +479,14 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn ending_expression_block(&mut self, block: &CodeBlock) -> Result<()> {
-        if let Some(ref wrapper) = self.buf_section && !wrapper.is_expression_list() {
-            if self.closing_token.is_some() {
-                self.token = self.closing_token.take();
+        let mut is_closing = false;
+        if let Some(ref wrapper) = self.buf_section {
+            if (!wrapper.is_expression_list() || self.code_state.is_close_statement()) ||
+                (wrapper.is_expression_list() && self.code_state.is_close_expression()) {
+                is_closing = true;
             }
-        } else if self.code_state.is_close_statement() {
+        }
+        if is_closing && self.closing_token.is_some() {
             self.token = self.closing_token.take();
         }
         self.ending_code_block(block)?;
