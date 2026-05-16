@@ -197,7 +197,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     self.code_state = CodeState::WriteAndOpenBlock;
                     return;
                 }
-                if self.section.is_term() {
+                if let Some((_, ref prev_value)) = prev_token &&
+                    *prev_value == "(" {
                     self.section = self.section.next();
                     self.code_state = CodeState::OpenInnerBlock;
                     return;
@@ -216,6 +217,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             _ if Operation::try_from(value.as_str()).is_ok() => {
                 if let Some((ref prev_name, _)) = prev_token &&
                     prev_name.is_symbol() {
+                        // if next section is a term - just open term
+                        // else next one is an expression - open inner block
                         self.section = self.section.next();
                         self.code_state = CodeState::OpenInnerBlock;
                 } else if let Some((ref prev_name, _)) = prev_token &&
