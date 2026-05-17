@@ -391,7 +391,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.prev_token = self.token.clone();
                 self.write_token()?;
 
-                if self.code_state != CodeState::Step {
+                if !self.code_state.is_step() {
                     break;
                 }
             }
