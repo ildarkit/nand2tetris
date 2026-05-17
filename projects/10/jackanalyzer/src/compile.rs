@@ -293,7 +293,9 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                     self.code_state = CodeState::Step;
                 }
             }
-            _ => {}
+            _ => {
+                unreachable!();
+            }
         }
     }
 
@@ -366,20 +368,24 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             if current_token.is_some() {
                 self.token = current_token.clone();
 
-                if self.section.is_expression_list() {
-                    let prev_token = self.prev_token.take();
-                    self.dispatch_expression_list(prev_token);
-                    if self.code_state.is_close_wrapper_block() {
-                        self.closing_token = self.token.take();
+                match self.section {
+                    CodeBlock::ExpressionList => {
+                        let prev_token = self.prev_token.take();
+                        self.dispatch_expression_list(prev_token);
+                        if self.code_state.is_close_wrapper_block() {
+                            self.closing_token = self.token.take();
+                        }
                     }
-                } else if self.section.is_all_expressions() {
-                    let prev_token = self.prev_token.take();
-                    self.dispatch_expression(prev_token);
-                    if self.code_state.is_closing_upper() {
-                        self.closing_token = self.token.take();
+                    _ if self.section.is_all_expressions() => {
+                        let prev_token = self.prev_token.take();
+                        self.dispatch_expression(prev_token);
+                        if self.code_state.is_closing_upper() {
+                            self.closing_token = self.token.take();
+                        }
                     }
-                } else {
-                    self.dispatch_statement(current_token);
+                    _ => {
+                        self.dispatch_statement(current_token);
+                    }
                 }
 
                 self.prev_token = self.token.clone();
