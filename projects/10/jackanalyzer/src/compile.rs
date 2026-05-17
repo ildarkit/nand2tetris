@@ -485,7 +485,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         false
     }
 
-    fn ending_expression_block(&mut self, block: &CodeBlock) -> Result<()> {
+    fn expression_closing_token(&mut self) {
         let mut is_closing = false;
         if let Some(ref wrapper) = self.buf_section {
             if (!wrapper.is_expression_list() || self.code_state.is_close_statement()) ||
@@ -496,8 +496,6 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         if is_closing && self.closing_token.is_some() {
             self.token = self.closing_token.take();
         }
-        self.ending_code_block(block)?;
-        Ok(())
     }
 
     fn ending_code_block(&mut self, block: &CodeBlock) -> Result<()> {
@@ -632,7 +630,8 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
             self.section_updated = true;
         }
         self.compile()?;
-        self.ending_expression_block(&code_block)?;
+        self.expression_closing_token();
+        self.ending_code_block(&code_block)?;
         self.buf_section = wrapper_block;
         self.restore_section();
         Ok(())
