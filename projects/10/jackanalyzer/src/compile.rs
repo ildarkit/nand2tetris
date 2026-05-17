@@ -431,34 +431,44 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn closing_block(&mut self, prev_section: &CodeBlock) -> bool {
-        if self.section.is_expression_list() && self.closing_token.is_some() {
-            self.code_state = CodeState::Step;
-            return true;
-        }
         if let Some((_, ref value)) = self.token && value == "," && prev_section.is_term() {
-            return true;
-        }
-        if self.section.is_expression() && self.code_state.is_closing_upper() {
-            return true;
-        }
-        if self.section.is_term() {
-            if self.code_state.is_closing_upper() {
-                if prev_section.is_expression() {
-                    self.code_state = CodeState::Step;
-                }
-                return true;
-            }
-        }
-        if self.section.is_ending_semicolon() && self.code_state.is_close_statement() {
-            self.code_state = CodeState::Step;
-            return true;
-        }
-        if self.section.is_while_statement() && self.code_state.is_close_block() {
-            self.code_state = CodeState::Step;
             return true;
         }
         if self.function_completed {
             return true;
+        }
+        match self.section {
+            CodeBlock::ExpressionList => {
+                if self.closing_token.is_some() {
+                    self.code_state = CodeState::Step;
+                    return true;
+                }
+            }
+            CodeBlock::Expression => {
+                if self.code_state.is_closing_upper() {
+                    return true;
+                }
+            }
+            CodeBlock::Term => {
+                if self.code_state.is_closing_upper() {
+                    if prev_section.is_expression() {
+                        self.code_state = CodeState::Step;
+                    }
+                    return true;
+                }
+            }
+            CodeBlock::WhileStatement => {
+                if self.code_state.is_close_block() {
+                    self.code_state = CodeState::Step;
+                    return true;
+                }
+            }
+            _ if self.section.is_ending_semicolon() &&
+                self.code_state.is_close_statement() => {
+                self.code_state = CodeState::Step;
+                return true;
+            }
+            _ => {}
         }
         false
     }
