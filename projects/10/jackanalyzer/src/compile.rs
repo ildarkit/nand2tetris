@@ -109,6 +109,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn dispatch_statement(&mut self, token: Option<(TokenType, String)>) {
+        let prev_section = self.section.clone();
         let Some((ref name, ref value)) = token else {
             self.code_state = CodeState::Step;
             return;
@@ -116,6 +117,11 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         match value.as_str() {
             _ if value != "class" && self.section_from(&value) => {
                 self.code_state = CodeState::OpenBlock;
+                if prev_section.is_subroutine_body() && self.section.is_all_statements() {
+                    self.toggle_statements(); // true
+                    self.buf_section = Some(self.section.clone());
+                    self.section = CodeBlock::Statements;
+                }
             }
             ";" => {
                 self.code_state = CodeState::CloseBlock;
@@ -139,15 +145,15 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             }
             "{" => {
                 self.statement_block_count += 1;
-                if !self.section.is_subroutine_dec() {
-                    if !self.section.is_class() {
-                        self.toggle_statements(); // true
-                    }
+                if self.section.is_subroutine_dec() {
+                    self.section = CodeBlock::SubroutineBody;
+                    self.code_state = CodeState::OpenBlock;
+                } else if self.section.is_class() {
                     self.code_state = CodeState::Step;
                 } else {
                     self.toggle_statements(); // true
-                    self.section = CodeBlock::SubroutineBody;
-                    self.code_state = CodeState::OpenBlock;
+                    self.section = CodeBlock::Statements;
+                    self.code_state = CodeState::WriteAndOpenBlock;
                 }
             }
             "}" => {
@@ -464,8 +470,6 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     {
         if !self.section_updated && self.is_start_statements() {
             *started = true;
-            self.buf_section = Some(self.section.clone());
-            self.section = CodeBlock::Statements;
         } else if code_block.is_if_statement() && *started {
             // closing if statement
             self.section_updated = true;
@@ -574,10 +578,12 @@ impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
     fn compile_statements(&mut self) -> Result<()> {
         let code_block = self.section.clone();
         self.toggle_statements(); // false
-        self.section_updated = true;
         self.put_start_name(&code_block)?;
-        if let Some(buf_section) = self.buf_section.take() {
-            self.section = buf_section;
+        if self.code_state.is_open_block() {
+            self.section_updated = true;
+            if let Some(buf_section) = self.buf_section.take() {
+                self.section = buf_section;
+            }
         }
         self.compile()?;
         self.ending_code_block(&code_block)?;

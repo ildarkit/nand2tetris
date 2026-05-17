@@ -114,7 +114,8 @@ impl CodeBlock {
             CodeBlock::DoStatement |
             CodeBlock::ReturnStatement |
             CodeBlock::IfStatement |
-            CodeBlock::WhileStatement
+            CodeBlock::WhileStatement |
+            CodeBlock::Statements
         )
     }
 
