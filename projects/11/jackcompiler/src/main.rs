@@ -3,6 +3,9 @@ mod tokenize;
 mod serialize;
 mod compile;
 mod grammar;
+mod symbol_table;
+mod vm_writer;
+mod label_generator;
 
 use std::env;
 use std::iter::once;
@@ -16,7 +19,7 @@ use crate::tokenize::JackTokenizer;
 use crate::serialize::XmlSerializer;
 use crate::compile::{CompilationEngine, Compiler};
 
-const MESSAGE: &str = "usage: jackanalyzer <Dir/File.jack>";
+const MESSAGE: &str = "usage: jackcompiler <Dir/File.jack>";
 
 fn compile(input: &Path) -> Result<()> {
     let reader = JackTokenizer::new(
