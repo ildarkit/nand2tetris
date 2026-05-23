@@ -2,6 +2,7 @@ use std::convert::AsRef;
 use anyhow::Result;
 use strum_macros::{EnumString, AsRefStr, EnumIs};
 use crate::vm_writer::VMCommandWriter;
+use crate::symbol_table::SymbolTable;
 use crate::tokenize::{Tokenizer, Token};
 use crate::grammar::{Term, CodeBlock, Operation};
 
@@ -68,6 +69,8 @@ pub trait Compiler {
 pub struct CompilationEngine<T: Tokenizer, W: VMCommandWriter> {
     reader: T,
     writer: W,
+    symbol_table: SymbolTable,
+    class_name: String,
     section: CodeBlock,
     token: Option<Token>,
     prev_token: Option<Token>,
@@ -87,6 +90,8 @@ impl<T: Tokenizer, W: VMCommandWriter> CompilationEngine<T, W> {
         Self {
             reader,
             writer,
+            symbol_table: SymbolTable::new(),
+            class_name: String::new(),
             section: CodeBlock::Class,
             token: None,
             prev_token: None,
@@ -549,6 +554,7 @@ impl<T: Tokenizer, W: VMCommandWriter> Compiler for CompilationEngine<T, W> {
     }
 
     fn compile_subroutine(&mut self) -> Result<()> {
+        self.symbol_table.reset();
         self.set_params_wrapper();
         self.wrap_compiler()?;
         self.toggle_function();
