@@ -16,6 +16,7 @@ enum CodeState {
     CloseWrapperBlock,
     CloseStatement,
     CloseExpression,
+    CloseExpressionListItem,
 }
 
 impl CodeState {
@@ -25,7 +26,8 @@ impl CodeState {
             CodeState::CloseBlock |
             CodeState::CloseWrapperBlock |
             CodeState::CloseStatement |
-            CodeState::CloseExpression
+            CodeState::CloseExpression |
+            CodeBlock::CloseExpressionListItem
         )
     }
 
@@ -185,7 +187,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 self.code_state = CodeState::CloseStatement;
             }
             "," => {
-                self.code_state = CodeState::CloseBlock;
+                self.code_state = CodeState::CloseExpressionListItem;
             }
             ")" | "]" => {
                 self.dec_bracket_count();
@@ -437,15 +439,12 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 
     fn closing_block(&mut self, prev_section: &CodeBlock) -> bool {
-        if let Some((_, ref value)) = self.token && value == "," && prev_section.is_term() {
-            return true;
-        }
         if self.function_completed {
             return true;
         }
         match self.section {
             CodeBlock::ExpressionList => {
-                if self.closing_token.is_some() {
+                if self.code_state.is_close_wrapper_block() {
                     self.code_state = CodeState::Step;
                     return true;
                 }
@@ -456,7 +455,8 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
                 }
             }
             CodeBlock::Term => {
-                if self.code_state.is_closing_upper() {
+                if self.code_state.is_closing_upper() ||
+                    self.code_state.is_close_expression_list_item() {
                     if prev_section.is_expression() {
                         self.code_state = CodeState::Step;
                     }
