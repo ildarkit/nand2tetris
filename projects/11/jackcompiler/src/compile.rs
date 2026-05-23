@@ -1,7 +1,7 @@
 use std::convert::AsRef;
 use anyhow::Result;
 use strum_macros::{EnumString, AsRefStr, EnumIs};
-use crate::serialize::Serializer;
+use crate::vm_writer::VMCommandWriter;
 use crate::tokenize::{Tokenizer, Token};
 use crate::grammar::{Term, CodeBlock, Operation};
 
@@ -65,9 +65,9 @@ pub trait Compiler {
     fn compile_expression_list(&mut self) -> Result<()>;
 }
 
-pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
+pub struct CompilationEngine<T: Tokenizer, W: VMCommandWriter> {
     reader: T,
-    writer: S,
+    writer: W,
     section: CodeBlock,
     token: Option<Token>,
     prev_token: Option<Token>,
@@ -82,8 +82,8 @@ pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     expression_bracket_count: u32,
 }
 
-impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
-    pub fn new(reader: T, writer: S) -> Self {
+impl<T: Tokenizer, W: VMCommandWriter> CompilationEngine<T, W> {
+    pub fn new(reader: T, writer: W) -> Self {
         Self {
             reader,
             writer,
@@ -537,7 +537,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
     }
 }
 
-impl<T: Tokenizer, S: Serializer> Compiler for CompilationEngine<T, S> {
+impl<T: Tokenizer, W: VMCommandWriter> Compiler for CompilationEngine<T, W> {
     fn compile_class(&mut self) -> Result<()> {
         self.wrap_compiler()?;
         Ok(())
