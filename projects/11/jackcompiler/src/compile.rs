@@ -27,7 +27,7 @@ impl CodeState {
             CodeState::CloseWrapperBlock |
             CodeState::CloseStatement |
             CodeState::CloseExpression |
-            CodeBlock::CloseExpressionListItem
+            CodeState::CloseExpressionListItem
         )
     }
 
