@@ -1,6 +1,5 @@
 // src/main.rs
 mod tokenize;
-mod serialize;
 mod compile;
 mod grammar;
 mod symbol_table;
@@ -16,7 +15,7 @@ use either::Either;
 use rayon::prelude::*;
 use anyhow::Result;
 use crate::tokenize::JackTokenizer;
-use crate::serialize::XmlSerializer;
+use crate::vm_writer::VMWriter;
 use crate::compile::{CompilationEngine, Compiler};
 
 const MESSAGE: &str = "usage: jackcompiler <Dir/File.jack>";
@@ -25,10 +24,10 @@ fn compile(input: &Path) -> Result<()> {
     let reader = JackTokenizer::new(
         BufReader::new(File::open(input)?)
     );
-    let writer = XmlSerializer::new(
+    let writer = VMWriter::new(
         BufWriter::new(
             File::create(
-                output_file(input, "xml")?
+                output_file(input, "vm")?
             )?
         )
     );
@@ -43,9 +42,10 @@ fn output_file(path: &Path, extension: &str) -> Result<PathBuf> {
             path
                 .file_stem()
                 .map(|name| {
-                    let mut new_name = name.to_os_string();
-                    new_name.push("T");
-                    parent.join(Path::new(&new_name).with_extension(extension))
+                    parent.join(
+                        Path::new(&name.to_os_string())
+                            .with_extension(extension)
+                    )
                 })
         })
         .flatten()
