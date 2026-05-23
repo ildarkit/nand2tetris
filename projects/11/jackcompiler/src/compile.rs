@@ -2,7 +2,7 @@ use std::convert::AsRef;
 use anyhow::Result;
 use strum_macros::{EnumString, AsRefStr, EnumIs};
 use crate::serialize::Serializer;
-use crate::tokenize::{Tokenizer, TokenType};
+use crate::tokenize::{Tokenizer, Token};
 use crate::grammar::{Term, CodeBlock, Operation};
 
 #[derive(PartialEq, AsRefStr, EnumIs, EnumString)]
@@ -69,8 +69,8 @@ pub struct CompilationEngine<T: Tokenizer, S: Serializer> {
     reader: T,
     writer: S,
     section: CodeBlock,
-    token: Option<(TokenType, String)>,
-    prev_token: Option<(TokenType, String)>,
+    token: Option<Token>,
+    prev_token: Option<Token>,
     closing_token: Option<(TokenType, String)>,
     param_wrapper: Option<CodeBlock>,
     buf_section: Option<CodeBlock>,
@@ -110,7 +110,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         self.expression_bracket_count -= 1;
     }
 
-    fn dispatch_statement(&mut self, token: Option<(TokenType, String)>) {
+    fn dispatch_statement(&mut self, token: Option<Token>) {
         let prev_section = self.section.clone();
         let Some((ref name, ref value)) = token else {
             self.code_state = CodeState::Step;
@@ -177,7 +177,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         }
     }
 
-    fn dispatch_expression(&mut self, prev_token: Option<(TokenType, String)>) {
+    fn dispatch_expression(&mut self, prev_token: Option<Token>) {
         let Some((ref name, ref value)) = self.token else {
             self.code_state = CodeState::Step;
             return;
@@ -261,7 +261,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
         }
     }
 
-    fn dispatch_expression_list(&mut self, prev_token: Option<(TokenType, String)>) {
+    fn dispatch_expression_list(&mut self, prev_token: Option<Token>) {
         let Some((ref name, ref value)) = self.token else {
             self.code_state = CodeState::Step;
             return;
@@ -303,24 +303,6 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
 
     fn section_from(&mut self, name: &str) -> bool {
         CodeBlock::try_from(name).map(|b| self.section = b).is_ok()
-    }
-
-    fn get_token(&mut self) -> Option<(TokenType, String)> {
-        let tt = self.reader.token_type();
-        match tt {
-            TokenType::Keyword => Some((tt, self.reader.keyword().to_string())),
-            TokenType::Symbol => Some((tt, self.reader.symbol().to_string())),
-            TokenType::Identifier => Some((tt, self.reader.identifier().to_string())),
-            TokenType::IntegerConstant => Some((tt, self.reader.int_val().to_string())),
-            TokenType::StringConstant => {
-                Some((tt, self.reader.string_val().trim_matches('"').to_string()))
-            }
-            TokenType::EOF => None,
-            TokenType::Invalid(tok) => {
-                eprintln!("Неверный токен: {}", tok);
-                None
-            }
-        }
     }
 
     fn compile_next(&mut self) -> Result<()> {
@@ -366,7 +348,7 @@ impl<T: Tokenizer, S: Serializer> CompilationEngine<T, S> {
             self.put_node(&name, &value)?;
         }
         while self.reader.advance()? {
-            let current_token = self.get_token();
+            let current_token = self.reader.token();
             if current_token.is_some() {
                 self.token = current_token.clone();
 
