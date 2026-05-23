@@ -180,17 +180,16 @@ impl<R: BufRead> Tokenizer for JackTokenizer<R> {
 
     fn token(&mut self) -> Option<Token> {
         let token_type = self.token_type();
-        let token = self.current_token();
         match token_type {
             TokenType::StringConstant => {
-                Some((token_type, token.trim_matches('"').to_string()))
+                Some((token_type, self.current_token().trim_matches('"').to_string()))
             }
             TokenType::EOF => None,
             TokenType::Invalid(t) => {
                 eprintln!("Неверный токен: {}", t);
                 None
             }
-            _ => Some((token_type, token.to_string())),
+            _ => Some((token_type, self.current_token().to_string())),
         }
     }
 }
