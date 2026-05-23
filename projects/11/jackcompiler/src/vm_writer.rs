@@ -1,5 +1,18 @@
 use std::io::{self, Write, BufWriter};
 
+pub trait VMCommandWriter {
+    fn write_push(&mut self, segment: Segment, index: usize) -> io::Result<()>;
+    fn write_pop(&mut self, segment: Segment, index: usize) -> io::Result<()>;
+    fn write_arithmetic(&mut self, command: Command) -> io::Result<()>;
+    fn write_label(&mut self, label: &str) -> io::Result<()>;
+    fn write_goto(&mut self, label: &str) -> io::Result<()>;
+    fn write_if(&mut self, label: &str) -> io::Result<()>;
+    fn write_call(&mut self, label: &str, n_args: usize) -> io::Result<()>;
+    fn write_function(&mut self, label: &str, n_locals: usize) -> io::Result<()>;
+    fn write_return(&mut self) -> io::Result<()>;
+    fn close(&mut self) -> io::Result<()>;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Segment {
     Constant,
@@ -48,16 +61,18 @@ impl<W: Write> VMWriter<W> {
             Segment::Temp => "temp",
         }
     }
+}
 
-    pub fn write_push(&mut self, segment: Segment, index: usize) -> io::Result<()> {
+impl<W: Write> VMCommandWriter for VMWriter<W> {
+    fn write_push(&mut self, segment: Segment, index: usize) -> io::Result<()> {
         writeln!(self.writer, "push {} {}", Self::segment_to_str(segment), index)
     }
 
-    pub fn write_pop(&mut self, segment: Segment, index: usize) -> io::Result<()> {
+    fn write_pop(&mut self, segment: Segment, index: usize) -> io::Result<()> {
         writeln!(self.writer, "pop {} {}", Self::segment_to_str(segment), index)
     }
 
-    pub fn write_arithmetic(&mut self, command: Command) -> io::Result<()> {
+    fn write_arithmetic(&mut self, command: Command) -> io::Result<()> {
         let cmd_str = match command {
             Command::Add => "add",
             Command::Sub => "sub",
@@ -72,31 +87,31 @@ impl<W: Write> VMWriter<W> {
         writeln!(self.writer, "{}", cmd_str)
     }
 
-    pub fn write_label(&mut self, label: &str) -> io::Result<()> {
+    fn write_label(&mut self, label: &str) -> io::Result<()> {
         writeln!(self.writer, "label {}", label)
     }
 
-    pub fn write_goto(&mut self, label: &str) -> io::Result<()> {
+    fn write_goto(&mut self, label: &str) -> io::Result<()> {
         writeln!(self.writer, "goto {}", label)
     }
 
-    pub fn write_if(&mut self, label: &str) -> io::Result<()> {
+    fn write_if(&mut self, label: &str) -> io::Result<()> {
         writeln!(self.writer, "if-goto {}", label)
     }
 
-    pub fn write_call(&mut self, label: &str, n_args: usize) -> io::Result<()> {
+    fn write_call(&mut self, label: &str, n_args: usize) -> io::Result<()> {
         writeln!(self.writer, "call {} {}", label, n_args)
     }
 
-    pub fn write_function(&mut self, label: &str, n_locals: usize) -> io::Result<()> {
+    fn write_function(&mut self, label: &str, n_locals: usize) -> io::Result<()> {
         writeln!(self.writer, "function {} {}", label, n_locals)
     }
 
-    pub fn write_return(&mut self) -> io::Result<()> {
+    fn write_return(&mut self) -> io::Result<()> {
         writeln!(self.writer, "return")
     }
 
-    pub fn close(&mut self) -> io::Result<()> {
+    fn close(&mut self) -> io::Result<()> {
         self.writer.flush()
     }
 }
