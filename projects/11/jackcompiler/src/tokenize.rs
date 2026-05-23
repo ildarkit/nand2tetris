@@ -3,6 +3,8 @@ use std::ops::Range;
 use anyhow::Result;
 use strum_macros::{AsRefStr, EnumIs};
 
+pub type Token = (TokenType, String);
+
 const SYMBOLS: &[char] = &[
     '{', '}', '(', ')', '[', ']', '.', ',', ';', 
     '+', '-', '*', '/', '&', '|', '<', '>', '=', '~'
@@ -10,12 +12,7 @@ const SYMBOLS: &[char] = &[
 
 pub trait Tokenizer {
     fn advance(&mut self) -> Result<bool>;
-    fn token_type(&mut self) -> TokenType;
-    fn keyword(&self) -> &str;
-    fn symbol(&self) -> &str;
-    fn identifier(&self) -> &str;
-    fn int_val(&self) -> &str;
-    fn string_val(&self) -> &str;
+    fn token(&mut self) -> Option<Token>;
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, AsRefStr, EnumIs)]
@@ -138,20 +135,6 @@ impl <R: BufRead> JackTokenizer<R> {
             .expect("Сначала нужно вызвать метод token_type");
         &self.data[range.clone()]
     }
-}
-
-impl<R: BufRead> Tokenizer for JackTokenizer<R> {
-    fn advance(&mut self) -> Result<bool> {
-        if self.data.is_empty() {
-            if !self.read_line()? {
-                return Ok(false);
-            }
-            self.index = 0;
-            self.tokens.clear();
-            self.get_tokens();
-        }
-        Ok(true)
-    }
 
     fn token_type(&mut self) -> TokenType {
         let Some(token) = self.next_token() else {
@@ -180,10 +163,34 @@ impl<R: BufRead> Tokenizer for JackTokenizer<R> {
             _ => TokenType::Invalid(token.to_string()),
         }
     }
+}
 
-    fn keyword(&self) -> &str { self.current_token() }
-    fn symbol(&self) -> &str { self.current_token() }
-    fn identifier(&self) -> &str { self.current_token() }
-    fn int_val(&self) -> &str { self.current_token() }
-    fn string_val(&self) -> &str { self.current_token() }
+impl<R: BufRead> Tokenizer for JackTokenizer<R> {
+    fn advance(&mut self) -> Result<bool> {
+        if self.data.is_empty() {
+            if !self.read_line()? {
+                return Ok(false);
+            }
+            self.index = 0;
+            self.tokens.clear();
+            self.get_tokens();
+        }
+        Ok(true)
+    }
+
+    fn token(&mut self) -> Option<Token> {
+        let token_type = self.token_type();
+        let token = self.current_token();
+        match token_type {
+            TokenType::StringConstant => {
+                Some((token_type, token.trim_matches('"').to_string()))
+            }
+            TokenType::EOF => None,
+            TokenType::Invalid(t) => {
+                eprintln!("Неверный токен: {}", t);
+                None
+            }
+            _ => Some((token_type, token.to_string())),
+        }
+    }
 }
