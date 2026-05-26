@@ -1,9 +1,5 @@
-use std::io::BufRead;
+use std::io::{self, BufRead};
 use std::ops::Range;
-use anyhow::Result;
-use strum_macros::{AsRefStr, EnumIs};
-
-pub type Token = (TokenType, String);
 
 const SYMBOLS: &[char] = &[
     '{', '}', '(', ')', '[', ']', '.', ',', ';', 
@@ -11,19 +7,17 @@ const SYMBOLS: &[char] = &[
 ];
 
 pub trait Tokenizer {
-    fn advance(&mut self) -> Result<bool>;
+    fn advance(&mut self) -> io::Result<bool>;
     fn token(&mut self) -> Option<Token>;
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, AsRefStr, EnumIs)]
-#[strum(serialize_all = "camelCase")]
-pub enum TokenType {
-    Keyword,
-    Symbol,
-    Identifier,
-    IntegerConstant,
-    StringConstant,
-    EOF,
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Token {
+    Keyword(String),
+    Symbol(String),
+    Identifier(String),
+    IntegerConstant(u16),
+    StringConstant(String),
     Invalid(String),
 }
 
@@ -47,7 +41,7 @@ impl <R: BufRead> JackTokenizer<R> {
         }
     }
 
-    fn read_line(&mut self) -> Result<bool> {
+    fn read_line(&mut self) -> io::Result<bool> {
         let mut multi_comment = false;
         self.data.clear();
         while self.reader.read_line(&mut self.data)? > 0 {
@@ -117,17 +111,16 @@ impl <R: BufRead> JackTokenizer<R> {
         }
     }
 
-    fn next_token(&mut self) -> Option<&str> {
+    fn next_token(&mut self) -> bool {
         if let Some(range) = self.tokens.get(self.index) {
-            let token = &self.data[range.clone()];
             self.current = Some(range.clone());
             self.index += 1;
-            return Some(token);
+            return true;
         } else {
             self.data.clear();
         }
         self.current = None;
-        None
+        false
     }
 
     fn current_token(&self) -> &str {
@@ -136,37 +129,36 @@ impl <R: BufRead> JackTokenizer<R> {
         &self.data[range.clone()]
     }
 
-    fn token_type(&mut self) -> TokenType {
-        let Some(token) = self.next_token() else {
-            return TokenType::EOF;
-        };
+    fn token_type(&mut self) -> Token {
+        while !self.next_token() { }
 
+        let token = self.current_token();
         match token {
             "class" | "constructor" | "function" | "method" | "field" | "static" |
             "var" | "int" | "char" | "boolean" | "void" | "true" | "false" | "null" |
             "this" | "let" | "do" | "if" | "else" | "while" | "return" => {
-                TokenType::Keyword
+                Token::Keyword(token.to_string())
             },
-            t if t.len() == 1 && SYMBOLS.contains(&t.chars().next().unwrap()) => {
-                TokenType::Symbol
+            _ if token.len() == 1 && SYMBOLS.contains(&token.chars().next().unwrap()) => {
+                Token::Symbol(token.to_string())
             },
             _ if token.starts_with('"') && token.ends_with('"') => {
-                TokenType::StringConstant
+                Token::StringConstant(token.trim_matches('"').to_string())
             },
-            _ if token.parse::<i32>().map_or(false, |n| (0..=32767).contains(&n)) => {
-                TokenType::IntegerConstant
+            _ if token.parse::<u16>().map_or(false, |n| (0..=32767).contains(&n)) => {
+                Token::IntegerConstant(token.parse().unwrap())
             },
             _ if !token.is_empty() && !token.starts_with(|c: char| c.is_ascii_digit()) 
                  && token.chars().all(|c| c.is_alphanumeric() || c == '_') => {
-                TokenType::Identifier
+                Token::Identifier(token.to_string())
             },
-            _ => TokenType::Invalid(token.to_string()),
+            _ => Token::Invalid(token.to_string()),
         }
     }
 }
 
 impl<R: BufRead> Tokenizer for JackTokenizer<R> {
-    fn advance(&mut self) -> Result<bool> {
+    fn advance(&mut self) -> io::Result<bool> {
         if self.data.is_empty() {
             if !self.read_line()? {
                 return Ok(false);
@@ -179,17 +171,13 @@ impl<R: BufRead> Tokenizer for JackTokenizer<R> {
     }
 
     fn token(&mut self) -> Option<Token> {
-        let token_type = self.token_type();
-        match token_type {
-            TokenType::StringConstant => {
-                Some((token_type, self.current_token().trim_matches('"').to_string()))
-            }
-            TokenType::EOF => None,
-            TokenType::Invalid(t) => {
-                eprintln!("Неверный токен: {}", t);
+        match self.advance() {
+            Ok(true) => Some(self.token_type()),
+            Ok(false) => None,
+            Err(e) => {
+                eprintln!("Ошибка чтения потока токенов: {}", e);
                 None
             }
-            _ => Some((token_type, self.current_token().to_string())),
         }
     }
 }
