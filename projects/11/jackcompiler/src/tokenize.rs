@@ -7,7 +7,6 @@ const SYMBOLS: &[char] = &[
 ];
 
 pub trait Tokenizer {
-    fn advance(&mut self) -> io::Result<bool>;
     fn token(&mut self) -> Option<Token>;
 }
 
@@ -155,9 +154,7 @@ impl <R: BufRead> JackTokenizer<R> {
             _ => Token::Invalid(token.to_string()),
         }
     }
-}
 
-impl<R: BufRead> Tokenizer for JackTokenizer<R> {
     fn advance(&mut self) -> io::Result<bool> {
         if self.data.is_empty() {
             if !self.read_line()? {
@@ -169,7 +166,9 @@ impl<R: BufRead> Tokenizer for JackTokenizer<R> {
         }
         Ok(true)
     }
+}
 
+impl<R: BufRead> Tokenizer for JackTokenizer<R> {
     fn token(&mut self) -> Option<Token> {
         match self.advance() {
             Ok(true) => Some(self.token_type()),
