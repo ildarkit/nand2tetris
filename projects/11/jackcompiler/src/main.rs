@@ -1,10 +1,10 @@
 // src/main.rs
 mod tokenize;
 mod compile;
-mod grammar;
 mod symbol_table;
 mod vm_writer;
 mod label_generator;
+mod parser;
 
 use std::env;
 use std::iter::once;
@@ -15,15 +15,17 @@ use either::Either;
 use rayon::prelude::*;
 use anyhow::Result;
 use crate::tokenize::JackTokenizer;
+use crate::parser::JackParser;
 use crate::vm_writer::VMWriter;
 use crate::compile::{CompilationEngine, Compiler};
 
 const MESSAGE: &str = "usage: jackcompiler <Dir/File.jack>";
 
 fn compile(input: &Path) -> Result<()> {
-    let reader = JackTokenizer::new(
+    let tokenizer = JackTokenizer::new(
         BufReader::new(File::open(input)?)
     );
+    let parser = JackParser::new(tokenizer);
     let writer = VMWriter::new(
         BufWriter::new(
             File::create(
@@ -31,7 +33,7 @@ fn compile(input: &Path) -> Result<()> {
             )?
         )
     );
-    let mut compiler = CompilationEngine::new(reader, writer);
+    let mut compiler = CompilationEngine::new(parser, writer);
     compiler.compile_class()?;
     Ok(())
 }
