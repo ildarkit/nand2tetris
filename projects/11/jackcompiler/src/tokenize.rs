@@ -15,8 +15,8 @@ pub enum Token {
     Keyword(String),
     Symbol(String),
     Identifier(String),
-    IntegerConstant(u16),
-    StringConstant(String),
+    IntConst(usize),
+    StringConst(String),
     Invalid(String),
 }
 
@@ -142,10 +142,10 @@ impl <R: BufRead> JackTokenizer<R> {
                 Token::Symbol(token.to_string())
             },
             _ if token.starts_with('"') && token.ends_with('"') => {
-                Token::StringConstant(token.trim_matches('"').to_string())
+                Token::StringConst(token.trim_matches('"').to_string())
             },
-            _ if token.parse::<u16>().map_or(false, |n| (0..=32767).contains(&n)) => {
-                Token::IntegerConstant(token.parse().unwrap())
+            _ if token.parse::<usize>().map_or(false, |n| (0..=32767).contains(&n)) => {
+                Token::IntConst(token.parse().unwrap())
             },
             _ if !token.is_empty() && !token.starts_with(|c: char| c.is_ascii_digit()) 
                  && token.chars().all(|c| c.is_alphanumeric() || c == '_') => {
