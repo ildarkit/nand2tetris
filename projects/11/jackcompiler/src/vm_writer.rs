@@ -15,7 +15,7 @@ pub trait VMCommandWriter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Segment {
-    Constant,
+    Const,
     Argument,
     Local,
     Static,
@@ -51,7 +51,7 @@ impl<W: Write> VMWriter<W> {
 
     fn segment_to_str(segment: Segment) -> &'static str {
         match segment {
-            Segment::Constant => "constant",
+            Segment::Const => "constant",
             Segment::Argument => "argument",
             Segment::Local => "local",
             Segment::Static => "static",
