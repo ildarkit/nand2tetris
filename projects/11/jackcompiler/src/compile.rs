@@ -2,7 +2,6 @@ use anyhow::Result;
 use crate::vm_writer::{Segment, Command, VMCommandWriter};
 use crate::symbol_table::{Kind, SymbolTable};
 use crate::parser::{ParserError, Parser};
-use crate::label_generator::LabelGenerator;
 
 pub trait Compiler {
     fn compile_class(&mut self) -> Result<()>;
@@ -25,7 +24,6 @@ pub trait Compiler {
 pub struct CompilationEngine<T: Parser, W: VMCommandWriter> {
     parser: T,
     writer: W,
-    label_gen: LabelGenerator,
     symbol_table: SymbolTable,
     class_name: String,
     current_subroutine_name: String,
@@ -38,7 +36,6 @@ impl<T: Parser, W: VMCommandWriter> CompilationEngine<T, W> {
         Self {
             parser,
             writer,
-            label_gen: LabelGenerator::new(),
             symbol_table: SymbolTable::new(),
             class_name: String::new(),
             current_subroutine_name: String::new(),

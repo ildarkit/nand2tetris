@@ -3,7 +3,6 @@ mod tokenize;
 mod compile;
 mod symbol_table;
 mod vm_writer;
-mod label_generator;
 mod parser;
 
 use std::env;
