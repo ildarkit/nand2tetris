@@ -87,6 +87,7 @@ impl<T: Parser, W: VMCommandWriter> Compiler for CompilationEngine<T, W> {
         }
 
         self.parser.expect_symbol("}")?;
+        self.writer.close()?;
         Ok(())
     }
 
@@ -296,7 +297,7 @@ impl<T: Parser, W: VMCommandWriter> Compiler for CompilationEngine<T, W> {
         let name = self.parser.expect_identifier()?;
         let next_char = self.parser.peek_next_char();
         let mut arg_count = 0;
-        let mut full_name = String::new();
+        let full_name;
 
         match next_char {
             // Вызов метода текущего класса:
