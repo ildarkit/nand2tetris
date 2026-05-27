@@ -1,52 +1,8 @@
-use std::convert::AsRef;
 use anyhow::Result;
-use strum_macros::{EnumString, AsRefStr, EnumIs};
-use crate::vm_writer::VMCommandWriter;
-use crate::symbol_table::SymbolTable;
-use crate::tokenize::{Tokenizer, Token};
-use crate::grammar::{Term, CodeBlock, Operation};
-
-#[derive(PartialEq, AsRefStr, EnumIs, EnumString)]
-#[strum(serialize_all = "camelCase")]
-enum CodeState {
-    OpenBlock,
-    OpenInnerBlock,
-    WriteAndOpenBlock,
-    CloseBlock,
-    Step,
-    CloseWrapperBlock,
-    CloseStatement,
-    CloseExpression,
-    CloseExpressionListItem,
-}
-
-impl CodeState {
-    fn is_closing(&self) -> bool {
-        matches!(
-            self,
-            CodeState::CloseBlock |
-            CodeState::CloseWrapperBlock |
-            CodeState::CloseStatement |
-            CodeState::CloseExpression |
-            CodeState::CloseExpressionListItem
-        )
-    }
-
-    fn is_closing_upper(&self) -> bool {
-        matches!(
-            self,
-            CodeState::CloseWrapperBlock |
-            CodeState::CloseStatement |
-            CodeState::CloseExpression
-        )
-    }
-}
-
-trait Output {
-    fn put_node<N: AsRef<str>>(&mut self, name: N, value: &str) -> Result<()>;
-    fn put_start_name<N: AsRef<str>>(&mut self, name: N) -> Result<()>;
-    fn put_end_name<N: AsRef<str>>(&mut self, name: N) -> Result<()>;
-}
+use crate::vm_writer::{Segment, Command, VMCommandWriter};
+use crate::symbol_table::{Kind, SymbolTable};
+use crate::parser::{ParserError, Parser};
+use crate::label_generator::LabelGenerator;
 
 pub trait Compiler {
     fn compile_class(&mut self) -> Result<()>;
@@ -63,611 +19,489 @@ pub trait Compiler {
     fn compile_return(&mut self) -> Result<()>;
     fn compile_expression(&mut self) -> Result<()>;
     fn compile_term(&mut self) -> Result<()>;
-    fn compile_expression_list(&mut self) -> Result<()>;
+    fn compile_expression_list(&mut self) -> Result<usize>;
 }
 
-pub struct CompilationEngine<T: Tokenizer, W: VMCommandWriter> {
-    reader: T,
+pub struct CompilationEngine<T: Parser, W: VMCommandWriter> {
+    parser: T,
     writer: W,
+    label_gen: LabelGenerator,
     symbol_table: SymbolTable,
     class_name: String,
-    section: CodeBlock,
-    token: Option<Token>,
-    prev_token: Option<Token>,
-    closing_token: Option<(TokenType, String)>,
-    param_wrapper: Option<CodeBlock>,
-    buf_section: Option<CodeBlock>,
-    function_completed: bool,
-    code_state: CodeState,
-    section_updated: bool,
-    statements_tag: bool,
-    statement_block_count: u32,
-    expression_bracket_count: u32,
+    current_subroutine_name: String,
+    current_subroutine_type: String,
+    label_index: u32,
 }
 
-impl<T: Tokenizer, W: VMCommandWriter> CompilationEngine<T, W> {
-    pub fn new(reader: T, writer: W) -> Self {
+impl<T: Parser, W: VMCommandWriter> CompilationEngine<T, W> {
+    pub fn new(parser: T, writer: W) -> Self {
         Self {
-            reader,
+            parser,
             writer,
+            label_gen: LabelGenerator::new(),
             symbol_table: SymbolTable::new(),
             class_name: String::new(),
-            section: CodeBlock::Class,
-            token: None,
-            prev_token: None,
-            closing_token: None,
-            param_wrapper: None,
-            buf_section: None,
-            function_completed: false,
-            code_state: CodeState::Step,
-            section_updated: false,
-            statements_tag: false,
-            statement_block_count: 0,
-            expression_bracket_count: 0,
+            current_subroutine_name: String::new(),
+            current_subroutine_type: String::new(),
+            label_index: 0,
         }
     }
 
-    fn inc_bracket_count(&mut self) {
-        self.expression_bracket_count += 1;
-    }
-
-    fn dec_bracket_count(&mut self) {
-        self.expression_bracket_count -= 1;
-    }
-
-    fn dispatch_statement(&mut self, token: Option<Token>) {
-        let prev_section = self.section.clone();
-        let Some((ref name, ref value)) = token else {
-            self.code_state = CodeState::Step;
-            return;
-        };
-        match value.as_str() {
-            _ if value != "class" && self.section_from(&value) => {
-                self.code_state = CodeState::OpenBlock;
-                if prev_section.is_subroutine_body() && self.section.is_all_statements() {
-                    self.toggle_statements(); // true
-                    self.buf_section = Some(self.section.clone());
-                    self.section = CodeBlock::Statements;
-                }
-            }
-            ";" => {
-                self.code_state = CodeState::CloseBlock;
-            }
-            ")" => {
-                self.dec_bracket_count();
-                if self.section.is_while_statement() {
-                    self.code_state = CodeState::Step;
-                    return;
-                }
-                self.code_state = CodeState::CloseBlock;
-            }
-            "(" | "[" => {
-                self.inc_bracket_count();
-                self.start_expression();
-                self.code_state = CodeState::WriteAndOpenBlock;
-            }
-            "=" => {
-                self.start_expression();
-                self.code_state = CodeState::WriteAndOpenBlock;
-            }
-            "{" => {
-                self.statement_block_count += 1;
-                if self.section.is_subroutine_dec() {
-                    self.section = CodeBlock::SubroutineBody;
-                    self.code_state = CodeState::OpenBlock;
-                } else if self.section.is_class() {
-                    self.code_state = CodeState::Step;
-                } else {
-                    self.toggle_statements(); // true
-                    self.section = CodeBlock::Statements;
-                    self.code_state = CodeState::WriteAndOpenBlock;
-                }
-            }
-            "}" => {
-                self.statement_block_count -= 1;
-                if self.statement_block_count == 1 {
-                    self.toggle_function(); // true
-                }
-                self.code_state = CodeState::CloseBlock;
-            }
-            _ => {
-                if Term::try_from(name.as_ref()).is_ok() &&
-                    self.section.is_return_statement() {
-                    self.start_expression();
-                    self.code_state = CodeState::OpenInnerBlock;
-                    return;
-                }
-                self.code_state = CodeState::Step;
-            }
-        }
-    }
-
-    fn dispatch_expression(&mut self, prev_token: Option<Token>) {
-        let Some((ref name, ref value)) = self.token else {
-            self.code_state = CodeState::Step;
-            return;
-        };
-        match value.as_str() {
-            ";" => {
-                self.code_state = CodeState::CloseStatement;
-            }
-            "," => {
-                self.code_state = CodeState::CloseExpressionListItem;
-            }
-            ")" | "]" => {
-                self.dec_bracket_count();
-                if self.expression_bracket_count > 0 {
-                    self.code_state = CodeState::CloseExpression;
-                } else {
-                    self.code_state = CodeState::CloseWrapperBlock;
-                }
-            }
-            "(" => {
-                self.inc_bracket_count();
-                if let Some((ref prev_name, _)) = prev_token &&
-                    prev_name.is_identifier() {
-                    self.section = CodeBlock::ExpressionList;
-                    self.code_state = CodeState::WriteAndOpenBlock;
-                    return;
-                }
-                if let Some((_, ref prev_value)) = prev_token &&
-                    *prev_value == "(" {
-                    self.section = self.section.next();
-                    self.code_state = CodeState::OpenInnerBlock;
-                    return;
-                }
-                self.section = CodeBlock::Term;
-                self.code_state = CodeState::OpenBlock;
-            }
-            "[" => {
-                self.inc_bracket_count();
-                self.section = self.section.next();
-                self.code_state = CodeState::WriteAndOpenBlock;
-            }
-            "." => {
-                self.code_state = CodeState::Step;
-            }
-            _ if Operation::try_from(value.as_str()).is_ok() => {
-                if let Some((ref prev_name, _)) = prev_token &&
-                    prev_name.is_symbol() {
-                        // if next section is a term - just open term
-                        // else next one is an expression - open inner block
-                        self.section = self.section.next();
-                        self.code_state = CodeState::OpenInnerBlock;
-                } else if let Some((ref prev_name, _)) = prev_token &&
-                    Term::try_from(prev_name.as_ref()).is_ok() {
-                    self.code_state = CodeState::CloseBlock;
-                } else {
-                    self.code_state = CodeState::Step;
-                }
-            }
-            _ if Term::try_from(name.as_ref()).is_ok() => {
-                if let Some((_, ref prev_value)) = prev_token &&
-                    *prev_value == "." {
-                    self.code_state = CodeState::Step;
-                } else if let Some((_, ref prev_value)) = prev_token &&
-                    *prev_value == "(" {
-                        self.section = self.section.next();
-                        self.code_state = CodeState::OpenInnerBlock;
-                } else {
-                    self.section = CodeBlock::Term;
-                    self.code_state = CodeState::OpenBlock;
-                }
-            }
-            _ => {
-                if let Some((ref prev_name, _)) = prev_token &&
-                    prev_name.is_symbol() {
-                        self.section = self.section.next();
-                        self.code_state = CodeState::OpenBlock;
-                } else {
-                    self.code_state = CodeState::Step;
-                }
-            }
-        }
-    }
-
-    fn dispatch_expression_list(&mut self, prev_token: Option<Token>) {
-        let Some((ref name, ref value)) = self.token else {
-            self.code_state = CodeState::Step;
-            return;
-        };
-        match value.as_str() {
-            _ if Term::try_from(name.as_ref()).is_ok() => {
-                self.buf_section = Some(self.section.clone());
-                self.section = CodeBlock::Expression;
-                self.code_state = CodeState::OpenInnerBlock; 
-            }
-            ")" => {
-                self.dec_bracket_count();
-                self.code_state = CodeState::CloseWrapperBlock;
-            }
-            "(" => {
-                self.inc_bracket_count();
-                self.buf_section = Some(self.section.clone());
-                self.section = CodeBlock::Expression;
-                self.code_state = CodeState::OpenInnerBlock;
-            }
-            _ if Operation::try_from(value.as_str()).is_ok() => {
-                if let Some((ref prev_name, _)) = prev_token &&
-                    prev_name.is_symbol() {
-                        self.buf_section = Some(self.section.clone());
-                        self.section = self.section.next();
-                        self.code_state = CodeState::OpenInnerBlock;
-                } else if let Some((ref prev_name, _)) = prev_token &&
-                    Term::try_from(prev_name.as_ref()).is_ok() {
-                    self.code_state = CodeState::CloseBlock;
-                } else {
-                    self.code_state = CodeState::Step;
-                }
-            }
-            _ => {
-                unreachable!();
-            }
-        }
-    }
-
-    fn section_from(&mut self, name: &str) -> bool {
-        CodeBlock::try_from(name).map(|b| self.section = b).is_ok()
-    }
-
-    fn compile_next(&mut self) -> Result<()> {
-        match self.section {
-            CodeBlock::Class => unreachable!(),
-            CodeBlock::ClassVarDec => self.compile_class_var_dec(),
-            CodeBlock::SubroutineDec => self.compile_subroutine(),
-            CodeBlock::ParameterList => self.compile_parameter_list(),
-            CodeBlock::SubroutineBody => self.compile_subroutine_body(),
-            CodeBlock::VarDec => self.compile_var_dec(),
-            CodeBlock::Statements => self.compile_statements(),
-            CodeBlock::Expression => self.compile_expression(),
-            CodeBlock::Term => self.compile_term(),
-            CodeBlock::ExpressionList => self.compile_expression_list(),
-            CodeBlock::LetStatement => self.compile_let(),
-            CodeBlock::IfStatement => self.compile_if(),
-            CodeBlock::WhileStatement => self.compile_while(),
-            CodeBlock::DoStatement => self.compile_do(),
-            CodeBlock::ReturnStatement => self.compile_return(),
-        }
-    }
-
-    fn set_params_wrapper(&mut self) {
-        self.param_wrapper.replace(self.section.next());
-    }
-
-    fn start_expression(&mut self) {
-        let wrapper = self.param_wrapper.take();
-        if let Some(section) = wrapper {
-            self.buf_section = Some(self.section.clone());
-            self.section = section;
-        }
-    }
-
-    fn restore_section(&mut self) {
-        if let Some(section) = self.buf_section.clone() {
-            self.section = section;
-        }
-    }
-
-    fn compile_block(&mut self) -> Result<()> {
-        if let Some((name, value)) = self.token.take() {
-            self.put_node(&name, &value)?;
-        }
-        while self.reader.advance()? {
-            let current_token = self.reader.token();
-            if current_token.is_some() {
-                self.token = current_token.clone();
-
-                match self.section {
-                    CodeBlock::ExpressionList => {
-                        let prev_token = self.prev_token.take();
-                        self.dispatch_expression_list(prev_token);
-                        if self.code_state.is_close_wrapper_block() {
-                            self.closing_token = self.token.take();
-                        }
-                    }
-                    _ if self.section.is_all_expressions() => {
-                        let prev_token = self.prev_token.take();
-                        self.dispatch_expression(prev_token);
-                        if self.code_state.is_closing_upper() {
-                            self.closing_token = self.token.take();
-                        }
-                    }
-                    _ => {
-                        self.dispatch_statement(current_token);
-                    }
-                }
-
-                self.prev_token = self.token.clone();
-                self.write_token()?;
-
-                if !self.code_state.is_step() {
-                    break;
-                }
-            }
-        }
+    fn push_variable_by_name(&mut self, name: &str) -> Result<()> {
+        let kind = self.symbol_table.kind_of(name)
+            .ok_or_else(|| ParserError::UndefinedVariable(name.to_string()))
+            .map_err(anyhow::Error::from)?;
+        let index = self.symbol_table.index_of(name).unwrap();
+        self.writer.write_push(self.kind_to_segment(kind), index)?;
         Ok(())
     }
 
-    fn write_token(&mut self) -> Result<()> {
-        match self.code_state {
-            CodeState::WriteAndOpenBlock | CodeState::Step => {
-                if let Some((name, value)) = self.token.take() {
-                    self.put_node(&name, &value)?;
-                }
-            }
-            _ => {}
-        }
+    fn pop_variable_by_name(&mut self, name: &str) -> Result<()> {
+        let kind = self.symbol_table.kind_of(name)
+            .ok_or_else(|| ParserError::UndefinedVariable(name.to_string()))
+            .map_err(anyhow::Error::from)?;
+        let index = self.symbol_table.index_of(name).unwrap();
+        self.writer.write_pop(self.kind_to_segment(kind), index)?;
         Ok(())
     }
 
-    fn compile(&mut self) -> Result<()> {
-        let code_block = self.section.clone();
-        let mut started = false;
-        loop {
-            if !self.section_updated {
-                self.compile_block()?;
-                if self.code_state.is_closing() {
-                    break;
-                }
-            }
-            if self.is_if_statement_closing_statements(&code_block, &mut started) {
-                break;
-            }
-            let prev_section = self.section.clone();
-            self.compile_next()?;
-            if !self.section_updated {
-                self.section = code_block.clone();
-            }
-            if self.closing_block(&prev_section) {
-                break;
-            }
+    fn kind_to_segment(&self, kind: Kind) -> Segment {
+        match kind {
+            Kind::Var => Segment::Local,
+            Kind::Arg => Segment::Argument,
+            Kind::Field => Segment::This,
+            Kind::Static => Segment::Static,
         }
-        Ok(())
-    }
-
-    fn closing_block(&mut self, prev_section: &CodeBlock) -> bool {
-        if self.function_completed {
-            return true;
-        }
-        match self.section {
-            CodeBlock::ExpressionList => {
-                if self.code_state.is_close_wrapper_block() {
-                    self.code_state = CodeState::Step;
-                    return true;
-                }
-            }
-            CodeBlock::Expression => {
-                if self.code_state.is_closing_upper() {
-                    return true;
-                }
-            }
-            CodeBlock::Term => {
-                if self.code_state.is_closing_upper() ||
-                    self.code_state.is_close_expression_list_item() {
-                    if prev_section.is_expression() {
-                        self.code_state = CodeState::Step;
-                    }
-                    return true;
-                }
-            }
-            CodeBlock::WhileStatement => {
-                if self.code_state.is_close_block() {
-                    self.code_state = CodeState::Step;
-                    return true;
-                }
-            }
-            _ if self.section.is_ending_semicolon() &&
-                self.code_state.is_close_statement() => {
-                self.code_state = CodeState::Step;
-                return true;
-            }
-            _ => {}
-        }
-        false
-    }
-
-    fn is_if_statement_closing_statements(
-        &mut self,
-        code_block: &CodeBlock,
-        started: &mut bool) -> bool
-    {
-        if !self.section_updated && self.is_start_statements() {
-            *started = true;
-        } else if code_block.is_if_statement() && *started {
-            // closing if statement
-            self.section_updated = true;
-            return true;
-        }
-        false
-    }
-
-    fn is_start_statements(&mut self) -> bool {
-        if self.section.is_all_statements() && self.statements_tag {
-            return true;
-        }
-        false
-    }
-
-    fn expression_closing_token(&mut self) {
-        let mut is_closing = false;
-        if let Some(ref wrapper) = self.buf_section {
-            if (!wrapper.is_expression_list() || self.code_state.is_close_statement()) ||
-                (wrapper.is_expression_list() && self.code_state.is_close_expression()) {
-                is_closing = true;
-            }
-        }
-        if is_closing && self.closing_token.is_some() {
-            self.token = self.closing_token.take();
-        }
-    }
-
-    fn ending_code_block(&mut self, block: &CodeBlock) -> Result<()> {
-        let token = if !(self.section_updated || block.is_term()) {
-            self.token.take()
-        } else {
-            None
-        };
-        if block.is_outside_closing() {
-            if let Some((name, value)) = token {
-                self.put_node(&name, &value)?;
-            }
-            self.put_end_name(block)?;
-        } else {
-            self.put_end_name(block)?;
-            if let Some((name, value)) = token {
-                self.put_node(&name, &value)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn wrap_compiler(&mut self) -> Result<()> {
-        let code_block = self.section.clone();
-        self.section_updated = false;
-        self.put_start_name(&code_block)?;
-        self.compile()?;
-        if code_block.is_expression_list() {
-            self.token = self.closing_token.take();
-        }
-        self.ending_code_block(&code_block)?;
-        Ok(())
-    }
-
-    fn toggle_function(&mut self) {
-        self.function_completed = !self.function_completed;
-    }
-
-    fn toggle_statements(&mut self) {
-        self.statements_tag = !self.statements_tag;
     }
 }
 
-impl<T: Tokenizer, W: VMCommandWriter> Compiler for CompilationEngine<T, W> {
+impl<T: Parser, W: VMCommandWriter> Compiler for CompilationEngine<T, W> {
     fn compile_class(&mut self) -> Result<()> {
-        self.wrap_compiler()?;
+        self.parser.expect_keyword("class")?;
+        self.class_name = self.parser.expect_identifier()?;
+        self.parser.expect_symbol("{")?;
+
+        while self.parser.peek_keyword_matches(&["static", "field"]) {
+            self.compile_class_var_dec()?;
+        }
+
+        while self.parser.peek_keyword_matches(&["constructor", "function", "method"]) {
+            self.compile_subroutine()?;
+        }
+
+        self.parser.expect_symbol("}")?;
         Ok(())
     }
 
     fn compile_class_var_dec(&mut self) -> Result<()> {
-        self.wrap_compiler()?;
+        let kind_str = self.parser.expect_keyword_choices(&["static", "field"])?;
+        let kind = match kind_str.as_str() {
+            "static" => Kind::Static,
+            "field" => Kind::Field,
+            _ => unreachable!(),
+        };
+
+        let var_type = self.parser.parse_type()?;
+        let var_name = self.parser.expect_identifier()?;
+        self.symbol_table.define(&var_name, &var_type, kind);
+
+        while self.parser.peek_symbol_matches(",") {
+            self.parser.expect_symbol(",")?;
+            let next_name = self.parser.expect_identifier()?;
+            self.symbol_table.define(&next_name, &var_type, kind);
+        }
+
+        self.parser.expect_symbol(";")?;
         Ok(())
     }
 
     fn compile_subroutine(&mut self) -> Result<()> {
         self.symbol_table.reset();
-        self.set_params_wrapper();
-        self.wrap_compiler()?;
-        self.toggle_function();
+
+        self.current_subroutine_type = self.parser
+            .expect_keyword_choices(&["constructor", "function", "method"])?;
+        let _return_type = self.parser.parse_type()?;
+        self.current_subroutine_name = self.parser.expect_identifier()?;
+
+        if self.current_subroutine_type == "method" {
+            self.symbol_table.define("this", &self.class_name, Kind::Arg);
+        }
+
+        self.parser.expect_symbol("(")?;
+        self.compile_parameter_list()?;
+        self.parser.expect_symbol(")")?;
+
+        self.compile_subroutine_body()?;
         Ok(())
     }
 
     fn compile_parameter_list(&mut self) -> Result<()> {
-        self.wrap_compiler()?;
-        self.restore_section();
+        if !self.parser.peek_symbol_matches(")") {
+            let var_type = self.parser.parse_type()?;
+            let var_name = self.parser.expect_identifier()?;
+            self.symbol_table.define(&var_name, &var_type, Kind::Arg);
+
+            while self.parser.peek_symbol_matches(",") {
+                self.parser.expect_symbol(",")?;
+                let next_type = self.parser.parse_type()?;
+                let next_name = self.parser.expect_identifier()?;
+                self.symbol_table.define(&next_name, &next_type, Kind::Arg);
+            }
+        }
         Ok(())
     }
 
     fn compile_subroutine_body(&mut self) -> Result<()> {
-        self.wrap_compiler()?;
+        self.parser.expect_symbol("{")?;
+
+        while self.parser.peek_keyword_matches(&["var"]) {
+            self.compile_var_dec()?;
+        }
+
+        let n_locals = self.symbol_table.var_count(Kind::Var);
+        let full_name = format!("{}.{}", self.class_name, self.current_subroutine_name);
+        self.writer.write_function(&full_name, n_locals)?;
+
+        match self.current_subroutine_type.as_str() {
+            "constructor" => {
+                let fields_count = self.symbol_table.var_count(Kind::Field);
+                self.writer.write_push(Segment::Const, fields_count)?;
+                self.writer.write_call("Memory.alloc", 1)?;
+                self.writer.write_pop(Segment::Pointer, 0)?;
+            }
+            "method" => {
+                self.writer.write_push(Segment::Argument, 0)?;
+                self.writer.write_pop(Segment::Pointer, 0)?;
+            }
+            _ => {}
+        }
+
+        self.compile_statements()?;
+        self.parser.expect_symbol("}")?;
         Ok(())
     }
 
     fn compile_var_dec(&mut self) -> Result<()> {
-        self.wrap_compiler()?;
+        self.parser.expect_keyword("var")?;
+        let var_type = self.parser.parse_type()?;
+        let var_name = self.parser.expect_identifier()?;
+        self.symbol_table.define(&var_name, &var_type, Kind::Var);
+
+        while self.parser.peek_symbol_matches(",") {
+            self.parser.expect_symbol(",")?;
+            let next_name = self.parser.expect_identifier()?;
+            self.symbol_table.define(&next_name, &var_type, Kind::Var);
+        }
+
+        self.parser.expect_symbol(";")?;
         Ok(())
     }
 
     fn compile_statements(&mut self) -> Result<()> {
-        let code_block = self.section.clone();
-        self.toggle_statements(); // false
-        self.put_start_name(&code_block)?;
-        if self.code_state.is_open_block() {
-            self.section_updated = true;
-            if let Some(buf_section) = self.buf_section.take() {
-                self.section = buf_section;
+        while self.parser.peek_keyword_matches(&["let", "if", "while", "do", "return"]) {
+            let kw = self.parser.peek_keyword()?;
+            match kw.as_str() {
+                "let" => self.compile_let()?,
+                "if" => self.compile_if()?,
+                "while" => self.compile_while()?,
+                "do" => self.compile_do()?,
+                "return" => self.compile_return()?,
+                _ => unreachable!(),
             }
         }
-        self.compile()?;
-        self.ending_code_block(&code_block)?;
         Ok(())
     }
 
     fn compile_let(&mut self) -> Result<()> {
-        self.set_params_wrapper();
-        self.wrap_compiler()?;
-        self.code_state = CodeState::Step;
+        self.parser.expect_keyword("let")?;
+        let var_name = self.parser.expect_identifier()?;
+        let is_array = self.parser.peek_symbol_matches("[");
+
+        if is_array {
+            self.push_variable_by_name(&var_name)?;
+            self.parser.expect_symbol("[")?;
+            self.compile_expression()?;
+            self.parser.expect_symbol("]")?;
+            self.writer.write_arithmetic(Command::Add)?;
+
+            self.parser.expect_symbol("=")?;
+            self.compile_expression()?;
+
+            self.writer.write_pop(Segment::Temp, 0)?;
+            self.writer.write_pop(Segment::Pointer, 1)?;
+            self.writer.write_push(Segment::Temp, 0)?;
+            self.writer.write_pop(Segment::That, 0)?;
+        } else {
+            self.parser.expect_symbol("=")?;
+            self.compile_expression()?;
+            self.pop_variable_by_name(&var_name)?;
+        }
+
+        self.parser.expect_symbol(";")?;
         Ok(())
     }
 
     fn compile_if(&mut self) -> Result<()> {
-        self.set_params_wrapper();
-        self.wrap_compiler()?;
+        let label_else = format!("IF_ELSE{}", self.label_index);
+        let label_end = format!("IF_END{}", self.label_index);
+        self.label_index += 1;
+
+        self.parser.expect_keyword("if")?;
+        self.parser.expect_symbol("(")?;
+        self.compile_expression()?;
+        self.parser.expect_symbol(")")?;
+
+        self.writer.write_arithmetic(Command::Not)?;
+        self.writer.write_if(&label_else)?;
+
+        self.parser.expect_symbol("{")?;
+        self.compile_statements()?;
+        self.parser.expect_symbol("}")?;
+        self.writer.write_goto(&label_end)?;
+
+        self.writer.write_label(&label_else)?;
+        if self.parser.peek_keyword_matches(&["else"]) {
+            self.parser.expect_keyword("else")?;
+            self.parser.expect_symbol("{")?;
+            self.compile_statements()?;
+            self.parser.expect_symbol("}")?;
+        }
+        self.writer.write_label(&label_end)?;
         Ok(())
     }
 
     fn compile_while(&mut self) -> Result<()> {
-        self.set_params_wrapper();
-        self.wrap_compiler()?;
+        let label_exp = format!("WHILE_EXP{}", self.label_index);
+        let label_end = format!("WHILE_END{}", self.label_index);
+        self.label_index += 1;
+
+        self.parser.expect_keyword("while")?;
+        self.writer.write_label(&label_exp)?;
+
+        self.parser.expect_symbol("(")?;
+        self.compile_expression()?;
+        self.parser.expect_symbol(")")?;
+
+        self.writer.write_arithmetic(Command::Not)?;
+        self.writer.write_if(&label_end)?;
+
+        self.parser.expect_symbol("{")?;
+        self.compile_statements()?;
+        self.parser.expect_symbol("}")?;
+
+        self.writer.write_goto(&label_exp)?;
+        self.writer.write_label(&label_end)?;
         Ok(())
     }
 
     fn compile_do(&mut self) -> Result<()> {
-        self.set_params_wrapper();
-        self.wrap_compiler()?;
+        self.parser.expect_keyword("do")?;
+        let name = self.parser.expect_identifier()?;
+        let next_char = self.parser.peek_next_char();
+        let mut arg_count = 0;
+        let mut full_name = String::new();
+
+        match next_char {
+            // Вызов метода текущего класса:
+            // do foo(args) -> переводится в ТекущийКласс.foo(this, args)
+            "(" => {
+                self.parser.expect_symbol("(")?;
+                self.writer.write_push(Segment::Pointer, 0)?;
+                arg_count += 1;
+
+                arg_count += self.compile_expression_list()?;
+                self.parser.expect_symbol(")")?;
+
+                full_name = format!("{}.{}", self.class_name, name);
+            }
+            // Вызов вида: do X.foo(args)
+            "." => {
+                self.parser.expect_symbol(".")?;
+                let sub_name = self.parser.expect_identifier()?;
+                self.parser.expect_symbol("(")?;
+
+                // Проверяем, является ли X переменной (объектом)
+                if let Some(var_type) = self.symbol_table.type_of(&name) {
+                    self.push_variable_by_name(&name)?;
+                    arg_count += 1;
+                    full_name = format!("{}.{}", var_type, sub_name);
+                } else {
+                    // Если в таблице символов нет такого имени,
+                    // значит X — это имя Класса (статический вызов)
+                    full_name = format!("{}.{}", name, sub_name);
+                }
+
+                arg_count += self.compile_expression_list()?;
+                self.parser.expect_symbol(")")?;
+            }
+            _ => return Err(
+                ParserError::SyntaxError(
+                    "Expected '(' or '.' after identifier in 'do' statement".to_string())
+                        .into()
+                ),
+        }
+
+        self.writer.write_call(&full_name, arg_count)?;
+        // Любой вызов функции в Jack возвращает значение на стек (даже void возвращает 0).
+        // Так как это оператор do, результат нам не нужен — сбрасываем его в temp 0.
+        self.writer.write_pop(Segment::Temp, 0)?;
+        self.parser.expect_symbol(";")?;
         Ok(())
     }
 
     fn compile_return(&mut self) -> Result<()> {
-        self.set_params_wrapper();
-        self.wrap_compiler()?;
-        self.code_state = CodeState::Step;
+        self.parser.expect_keyword("return")?;
+
+        // Если сразу идет ';', значит это void-возврат
+        if self.parser.peek_symbol_matches(";") {
+            // Void-функции в Jack всегда возвращают константу 0
+            self.writer.write_push(Segment::Const, 0)?;
+        } else {
+            // Иначе вычисляем выражение и кладем его результат на стек
+            self.compile_expression()?;
+        }
+
+        self.parser.expect_symbol(";")?;
+        self.writer.write_return()?;
+        Ok(())
+    }
+
+    fn compile_expression_list(&mut self) -> Result<usize> {
+        let mut count = 0;
+        if !self.parser.peek_symbol_matches(")") {
+            self.compile_expression()?;
+            count += 1;
+            while self.parser.peek_symbol_matches(",") {
+                self.parser.expect_symbol(",")?;
+                self.compile_expression()?;
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    fn compile_term(&mut self) -> Result<()> {
+        if self.parser.peek_is_int_const() {
+            let val = self.parser.get_int_const()?;
+            self.writer.write_push(Segment::Const, val)?;
+        } 
+        else if self.parser.peek_is_string_const() {
+            let string_const = self.parser.get_string_const()?;
+            self.writer.write_push(Segment::Const, string_const.len())?;
+            self.writer.write_call("String.new", 1)?;
+            for c in string_const.chars() {
+                self.writer.write_push(Segment::Const, c as usize)?;
+                self.writer.write_call("String.appendChar", 2)?;
+            }
+        } 
+        else if self.parser.peek_keyword_matches(&["true", "false", "null", "this"]) {
+            let kw = self.parser.get_keyword()?;
+            match kw.as_str() {
+                "false" | "null" => self.writer.write_push(Segment::Const, 0)?,
+                "true" => {
+                    self.writer.write_push(Segment::Const, 0)?;
+                    self.writer.write_arithmetic(Command::Not)?; // -1 в Jack
+                }
+                "this" => self.writer.write_push(Segment::Pointer, 0)?,
+                _ => return Err(ParserError::UnexpectedKeyword(kw).into()),
+            }
+        } 
+        else if self.parser.peek_symbol_matches("(") {
+            self.parser.expect_symbol("(")?;
+            self.compile_expression()?;
+            self.parser.expect_symbol(")")?;
+        } 
+        else if self.parser.peek_symbol_matches_choices(&["-", "~"]) {
+            let unary_op = self.parser.get_symbol()?;
+            self.compile_term()?;
+            match unary_op.as_str() {
+                "-" => self.writer.write_arithmetic(Command::Neg),
+                "~" => self.writer.write_arithmetic(Command::Not),
+                _ => unreachable!(),
+            }?
+        } 
+        else if self.parser.peek_is_identifier() {
+            let name = self.parser.expect_identifier()?;
+            let next_char = self.parser.peek_next_char(); 
+
+            match next_char {
+                // Элемент массива: name[expression]
+                "[" => {
+                    self.push_variable_by_name(&name)?; // Кладем базовый адрес массива на стек
+                    self.parser.expect_symbol("[")?;
+                    self.compile_expression()?;        // Считаем индекс внутри [ ]
+                    self.parser.expect_symbol("]")?;
+                    self.writer.write_arithmetic(Command::Add)?; // base + index
+
+                    // Переносим вычисленный адрес в pointer 1 (segment THAT)
+                    self.writer.write_pop(Segment::Pointer, 1)?;
+                    // Читаем значение из памяти по этому адресу
+                    self.writer.write_push(Segment::That, 0)?;
+                }
+                // Вызов метода текущего класса: name(expressionList)
+                "(" => {
+                    self.parser.expect_symbol("(")?;
+                    // Так как это метод текущего класса, передаем 'this' первым аргументом
+                    self.writer.write_push(Segment::Pointer, 0)?;
+                    let arg_count = self.compile_expression_list()?;
+                    self.parser.expect_symbol(")")?;
+
+                    let full_name = format!("{}.{}", self.class_name, name);
+                    self.writer.write_call(&full_name, arg_count + 1)?;
+                }
+                // Вызов метода другого объекта ИЛИ статической функции: name.subroutine(exprList)
+                "." => {
+                    self.parser.expect_symbol(".")?;
+                    let sub_name = self.parser.expect_identifier()?;
+                    self.parser.expect_symbol("(")?;
+
+                    let mut arg_count = 0;
+                    let full_name = if let Some(var_type) = self.symbol_table.type_of(&name) {
+                        // Если `name` есть в таблице символов, значит это объект (метод).
+                        // Нам нужно передать сам объект в качестве первого аргумента.
+                        self.push_variable_by_name(&name)?;
+                        arg_count += 1;
+                        format!("{}.{}", var_type, sub_name) // ИмяКласса.имяМетода
+                    } else {
+                        // Иначе это имя класса (вызов статической функции, например Math.sqrt)
+                        format!("{}.{}", name, sub_name)
+                    };
+
+                    arg_count += self.compile_expression_list()?;
+                    self.parser.expect_symbol(")")?;
+                    self.writer.write_call(&full_name, arg_count)?;
+                }
+                // Просто переменная
+                _ => {
+                    self.push_variable_by_name(&name)?;
+                }
+            }
+        } else {
+            return Err(ParserError::SyntaxError("Invalid term".to_string()).into());
+        }
         Ok(())
     }
 
     fn compile_expression(&mut self) -> Result<()> {
-        let code_block = self.section.clone();
-        let wrapper_block = self.buf_section.clone();
-        self.section_updated = false;
-        self.put_start_name(&code_block)?;
-        if self.code_state == CodeState::OpenInnerBlock {
-            self.section = self.section.next();
-            self.section_updated = true;
+        self.compile_term()?;
+
+        while self.parser.peek_symbol_matches_choices(
+            &["+", "-", "*", "/", "&", "|", "<", ">", "="]) {
+            let op = self.parser.get_symbol()?;
+            self.compile_term()?;
+            match op.as_str() {
+                "+" => self.writer.write_arithmetic(Command::Add),
+                "-" => self.writer.write_arithmetic(Command::Sub),
+                "&" => self.writer.write_arithmetic(Command::And),
+                "|" => self.writer.write_arithmetic(Command::Or),
+                "<" => self.writer.write_arithmetic(Command::Lt),
+                ">" => self.writer.write_arithmetic(Command::Gt),
+                "=" => self.writer.write_arithmetic(Command::Eq),
+                "*" => self.writer.write_call("Math.multiply", 2),
+                "/" => self.writer.write_call("Math.divide", 2),
+                _ => return Err(ParserError::InvalidOperator(op).into()),
+            }?
         }
-        self.compile()?;
-        self.expression_closing_token();
-        self.ending_code_block(&code_block)?;
-        self.buf_section = wrapper_block;
-        self.restore_section();
-        Ok(())
-    }
-
-    fn compile_term(&mut self) -> Result<()> {
-        self.set_params_wrapper();
-        self.wrap_compiler()?;
-        Ok(())
-    }
-
-    fn compile_expression_list(&mut self) -> Result<()> {
-        self.set_params_wrapper();
-        self.wrap_compiler()?;
-        Ok(())
-    }
-}
-
-
-impl<T: Tokenizer, S: Serializer> Output for CompilationEngine<T, S> {
-    fn put_node<N: AsRef<str>>(&mut self, name: N, value: &str) -> Result<()> {
-        self.writer.write_node(name.as_ref(), value)?;
-        Ok(())
-    }
-
-    fn put_start_name<N: AsRef<str>>(&mut self, name: N) -> Result<()> {
-        self.writer.write_name(name.as_ref())?;
-        Ok(())
-    }
-
-    fn put_end_name<N: AsRef<str>>(&mut self, name: N) -> Result<()> {
-        self.writer.end_name(name.as_ref())?;
         Ok(())
     }
 }
