@@ -23,7 +23,6 @@ pub enum Token {
 pub struct JackTokenizer<R: BufRead> {
     reader: R,
     data: String,
-    current: Option<Range<usize>>,
     tokens: Vec<Range<usize>>,
     index: usize,
 }
@@ -34,7 +33,6 @@ impl <R: BufRead> JackTokenizer<R> {
         Self {
             reader,
             data: String::new(),
-            current: None,
             tokens: Vec::new(),
             index: 0,
         }
@@ -61,6 +59,9 @@ impl <R: BufRead> JackTokenizer<R> {
 
             let trimmed = self.data.trim(); 
             if !trimmed.is_empty() {
+                if trimmed.len() < self.data.len() {
+                    self.data = trimmed.to_string();
+                }
                 return Ok(true);
             }
             self.data.clear();
@@ -110,28 +111,14 @@ impl <R: BufRead> JackTokenizer<R> {
         }
     }
 
-    fn next_token(&mut self) -> bool {
-        if let Some(range) = self.tokens.get(self.index) {
-            self.current = Some(range.clone());
-            self.index += 1;
-            return true;
-        } else {
-            self.data.clear();
-        }
-        self.current = None;
-        false
-    }
-
-    fn current_token(&self) -> &str {
-        let range = self.current.as_ref()
-            .expect("Сначала нужно вызвать метод token_type");
-        &self.data[range.clone()]
+    fn next_token(&mut self) -> &str {
+        let range = self.tokens[self.index].clone();
+        self.index += 1;
+        return &self.data[range];
     }
 
     fn token_type(&mut self) -> Token {
-        while !self.next_token() { }
-
-        let token = self.current_token();
+        let token = self.next_token();
         match token {
             "class" | "constructor" | "function" | "method" | "field" | "static" |
             "var" | "int" | "char" | "boolean" | "void" | "true" | "false" | "null" |
@@ -156,7 +143,7 @@ impl <R: BufRead> JackTokenizer<R> {
     }
 
     fn advance(&mut self) -> io::Result<bool> {
-        if self.data.is_empty() {
+        if self.tokens.len() == 0 || self.tokens.len() == self.index {
             if !self.read_line()? {
                 return Ok(false);
             }
