@@ -116,7 +116,7 @@ class String {
       let lastDigit = val - (val / 10 * 10);
 
       if (val > 9) {
-        do setInt(val / 10);
+        do setIntVal(val / 10);
       }
       do appendChar(lastDigit + 48);
       return;
