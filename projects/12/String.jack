@@ -83,19 +83,27 @@ class String {
     method int intValue() {
       var char c;
       var int val, d, i;
-      var boolean isDigit;
+      var boolean isDigit, isNeg;
       let val = 0;
       let i = 0;
       let isDigit = true;
+      let isNeg = false;
       while ((i < length) & isDigit) {
         let c = charAt(i);
-        if ((c < 48) | (c > 57)) {
+        if ((c < 48 & (~(c = 45))) | (c > 57)) {
           let isDigit = false;
         } else {
-          let d = charAt(i) - 48;
-          let val = val * 10 + d;
+          if (c = 45) {
+            let isNeg = true;
+          } else {
+            let d = charAt(i) - 48;
+            let val = val * 10 + d;
+          }
         }
         let i = i + 1;
+      }
+      if (isNeg) {
+        let val = 0 - val;
       }
       return val;
     }
