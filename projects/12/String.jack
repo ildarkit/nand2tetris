@@ -11,53 +11,130 @@
  */
 class String {
 
+    field int length, maxLength;
+    field Array stringBuffer;
+
     /** constructs a new empty string with a maximum length of maxLength
      *  and initial length of 0. */
-    constructor String new(int maxLength) {
+    constructor String new(int len) {
+      let length = 0;
+      if (len = 0) {
+        let maxLength = 8;
+      } else {
+        let maxLength = len;
+      }
+      let stringBuffer = Array.new(maxLength);
+      return this;
     }
 
     /** Disposes this string. */
     method void dispose() {
+      do Memory.deAlloc(stringBuffer);
+      return;
     }
 
     /** Returns the current length of this string. */
     method int length() {
+      return length;
     }
 
     /** Returns the character at the j-th location of this string. */
     method char charAt(int j) {
+      return stringBuffer[j];
     }
 
     /** Sets the character at the j-th location of this string to c. */
     method void setCharAt(int j, char c) {
+      let stringBuffer[j] = c;
+      return;
     }
 
     /** Appends c to this string's end and returns this string. */
     method String appendChar(char c) {
+      var int i;
+      var Array newString;
+      if (length < maxLength) {
+        let stringBuffer[length] = c;
+      } else {
+        let i = 0;
+        let maxLength = maxLength * 2;
+        let newString = Array.new(maxLength);
+        while (i < length) {
+          let newString[i] = stringBuffer[i];
+          let i = i + 1;
+        }
+        do Memory.deAlloc(stringBuffer);
+        let stringBuffer = newString;
+      }
+      let length = length + 1;
+      return this;
     }
 
     /** Erases the last character from this string. */
     method void eraseLastChar() {
+      if (length > 0) {
+        let length = length - 1;
+      }
+      return;
     }
 
     /** Returns the integer value of this string, 
      *  until a non-digit character is detected. */
     method int intValue() {
+      var char c;
+      var int val, d, i;
+      var boolean isDigit;
+      let val = 0;
+      let i = 0;
+      let isDigit = true;
+      while ((i < length) & isDigit) {
+        let c = charAt(i);
+        if ((c < 48) | (c > 57)) {
+          let isDigit = false;
+        } else {
+          let d = charAt(i) - 48;
+          let val = val * 10 + d;
+        }
+        let i = i + 1;
+      }
+      return val;
     }
 
     /** Sets this string to hold a representation of the given value. */
     method void setInt(int val) {
+      let length = 0;
+      if (val < 0) {
+        do appendChar(45);
+      }
+      do setIntVal(Math.abs(val));
+      return;
+    }
+
+    method void setIntVal(int val) {
+      var int lastDigit;
+
+      let lastDigit = val - (val / 10 * 10);
+
+      if (val < 10) {
+        do appendChar(lastDigit + 48);
+      } else {
+        do setInt(val / 10);
+      }
+      return;
     }
 
     /** Returns the new line character. */
     function char newLine() {
+      return 128;
     }
 
     /** Returns the backspace character. */
     function char backSpace() {
+      return 129;
     }
 
     /** Returns the double quote (") character. */
     function char doubleQuote() {
+      return 34;
     }
 }
