@@ -72,14 +72,22 @@ class Memory {
       var int segment;
       var int lastSegment;
 
-      let lastSegment = freeList;
-      while (~(memory[lastSegment] = 0)) {
-        let lastSegment = memory[lastSegment];
-      }
-
       let segment = object - 2;
       let memory[segment] = 0;
-      let memory[lastSegment] = segment;
+
+      // freeList = 0 -> в куче нет доступных сегментов
+      // при освобождении начало связанного списка
+      // указывает на этот единственный свободный сегмент
+      if (freeList = 0) {
+        let freeList = segment;
+      } else {
+        let lastSegment = freeList;
+        while (~(memory[lastSegment] = 0)) {
+          let lastSegment = memory[lastSegment];
+        }
+
+        let memory[lastSegment] = segment;
+      }
       return;
     }
 }

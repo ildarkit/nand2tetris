@@ -59,10 +59,6 @@ label IF_TRUE0
 push constant 1
 pop local 1
 label IF_FALSE0
-push constant 8010
-push local 3
-call Memory.poke 2
-pop temp 0
 push constant 8003
 push constant 1
 push local 3
