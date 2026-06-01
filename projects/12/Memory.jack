@@ -34,20 +34,32 @@ class Memory {
     /** Finds an available RAM block of the given size and returns
      *  a reference to its base address. */
     function int alloc(int size) {
-      var int segment, totalSize, segmentSize, nextAddr;
+      var int segment, prevSegment, totalSize, segmentSize, nextAddr;
 
       let segment = freeList;
       let totalSize = size + 2;
+      let prevSegment = 0;
 
       while (~(segment = 0)) {
         let segmentSize = memory[segment + 1];
 
-        if ((segmentSize > totalSize) | (segmentSize = totalSize)) {
+        if (segmentSize = totalSize) {
+          if (prevSegment = 0) {
+            let freeList = memory[segment];
+          } else {
+            let memory[prevSegment] = memory[segment];
+          }
+          return segment + 2;
+        }
+
+        if (segmentSize > totalSize) {
           let memory[segment + 1] = segmentSize - totalSize;
           let nextAddr = segment + memory[segment + 1];
           let memory[nextAddr + 1] = totalSize;
           return nextAddr + 2;
         }
+
+        let prevSegment = segment;
         let segment = memory[segment];
       }
 
