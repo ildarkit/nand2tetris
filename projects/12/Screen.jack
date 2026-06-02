@@ -34,6 +34,10 @@ class Screen {
       return;
     }
 
+    function int getBitMask(int index) {
+      return bitMasks[index];
+    }
+
     /** Erases the entire screen. */
     function void clearScreen() {
       var int address, endAddress;
