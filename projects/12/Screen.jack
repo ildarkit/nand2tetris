@@ -70,26 +70,79 @@ class Screen {
       return;
     }
 
+    function void drawHorizontalLine(int x1, int x2, int y) {
+        var int startX, endX;
+        let startX = Math.min(x1, x2);
+        let endX = Math.max(x1, x2);
+        while (~(startX > endX)) {
+            do Screen.drawPixel(startX, y);
+            let startX = startX + 1;
+        }
+        return;
+    }
+
+    function void drawVerticalLine(int x, int y1, int y2) {
+        var int startY, endY;
+        let startY = Math.min(y1, y2);
+        let endY = Math.max(y1, y2);
+        while (~(startY > endY)) {
+            do Screen.drawPixel(x, startY);
+            let startY = startY + 1;
+        }
+        return;
+    }
+
     /** Draws a line from pixel (x1,y1) to pixel (x2,y2), using the current color. */
     function void drawLine(int x1, int y1, int x2, int y2) {
-      var int a, b, diff, dx, dy;
-      let a = 0;
-      let b = 0;
-      let diff = 0;
-      let dx = x2 - x1;
-      let dy = y2 - y1;
-
-      while (((a < dx) | (a = dx)) & ((b < dy) | (b = dy))) {
-        do Screen.drawPixel(x1 + a, y1 + b);
-        if (diff < 0) {
-          let a = a + 1;
-          let diff = diff + dy;
-        } else {
-          let b = b + 1;
-          let diff = diff - dx;
+        var int a, b, diff, dx, dy, stepX, stepY;
+        
+        // 1. Сразу перенаправляем прямые линии в быстрые циклы
+        if (y1 = y2) {
+            do Screen.drawHorizontalLine(x1, x2, y1);
+            return;
         }
-      }
-      return;
+        if (x1 = x2) {
+            do Screen.drawVerticalLine(x1, y1, y2);
+            return;
+        }
+
+        // 2. Настройка параметров для наклонных линий
+        let a = 0;
+        let b = 0;
+        let diff = 0;
+        let dx = Math.abs(x2 - x1);
+        let dy = Math.abs(y2 - y1);
+
+        if (x2 > x1) { let stepX = 1; } else { let stepX = -1; }
+        if (y2 > y1) { let stepY = 1; } else { let stepY = -1; }
+
+        // 3. Разделение алгоритма Брезенхема на два корректных направления
+        if (dx > dy) {
+            // Линия более пологая (шагаем по X на каждом шаге)
+            while (~(a > dx)) {
+                do Screen.drawPixel(x1 + (a * stepX), y1 + (b * stepY));
+                if (diff < 0) {
+                    let diff = diff + dy;
+                } else {
+                    let b = b + 1;
+                    let diff = diff + dy - dx;
+                }
+                let a = a + 1;
+            }
+        } else {
+            // Линия более крутая (шагаем по Y на каждом шаге)
+            while (~(b > dy)) {
+                do Screen.drawPixel(x1 + (a * stepX), y1 + (b * stepY));
+                if (diff < 0) {
+                    let diff = diff + dx;
+                } else {
+                    let a = a + 1;
+                    let diff = diff + dx - dy;
+                }
+                let b = b + 1;
+            }
+        }
+        return;
     }
 
     /** Draws a filled rectangle whose top left corner is (x1, y1)
