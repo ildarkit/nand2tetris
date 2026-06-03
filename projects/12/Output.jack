@@ -205,15 +205,16 @@ class Output {
     let y = row * 11;
     let i = 0;
 
-    do Screen.setColor(true);
-
     while (i < 11) {
       let fontRow = charMap[i]; // Получаем 8-битную маску текущей строки
       let j = 0;
       while (j < 8) {
         if (~((fontRow & Screen.getBitMask(j)) = 0)) {
-          do Screen.drawPixel(x + j, y + i);
+          do Screen.setColor(true);
+        } else {
+          do Screen.setColor(false);
         }
+        do Screen.drawPixel(x + j, y + i);
         let j = j + 1;
       }
       let i = i + 1;
